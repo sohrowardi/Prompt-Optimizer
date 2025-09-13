@@ -199,3 +199,43 @@ export const runRefinementStream = async (promptToImprove: string, critique: str
     
     return { improvedPrompt, fullResponse };
 };
+
+export const fetchTrendingPrompts = async (): Promise<string[]> => {
+    const prompt = `You are an AI assistant that finds trending content. Your task is to find 5 of the most popular and trending AI art or text generation prompts that people are currently using online. Use your search capabilities to find up-to-date examples. The prompts should be diverse and interesting. IMPORTANT: Return ONLY a valid JSON array of strings. Do not include any other text, explanation, or markdown. The output must be parsable by JSON.parse(). Example format: ["A photorealistic portrait of a futuristic cyborg ninja", "Create a short story in the style of Edgar Allan Poe about a haunted lighthouse"]`;
+    
+    try {
+        const response: GenerateContentResponse = await ai.models.generateContent({
+            model,
+            contents: prompt,
+            config: {
+                tools: [{ googleSearch: {} }],
+            },
+        });
+
+        const textResponse = response.text.trim();
+        
+        const jsonMatch = textResponse.match(/\[([\s\S]*)\]/);
+        if (jsonMatch && jsonMatch[0]) {
+            try {
+                const prompts = JSON.parse(jsonMatch[0]);
+                if (Array.isArray(prompts) && prompts.every(p => typeof p === 'string')) {
+                    return prompts.slice(0, 5);
+                }
+            } catch (e) {
+                console.error("Failed to parse JSON from Gemini response for trending prompts, falling back to regex.", e);
+            }
+        }
+
+        const regex = /"([^"]+)"/g;
+        const matches = textResponse.match(regex);
+        if (matches) {
+            return matches.map(match => match.replace(/"/g, '')).slice(0, 5);
+        }
+
+        console.warn("Could not extract any trending prompts from response:", textResponse);
+        return [];
+
+    } catch (error) {
+        throw handleGeminiError(error, "fetching trending prompts");
+    }
+};

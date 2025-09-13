@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { SparklesIcon } from './icons';
+import { fetchTrendingPrompts } from '../services/geminiService';
 
 interface WelcomeViewProps {
   onSubmit: (prompt: string) => void;
   isLoading: boolean;
 }
 
-const examplePrompts = [
+const defaultExamplePrompts = [
   "Explain quantum computing in simple terms",
   "Write a python script to scrape a website",
   "Draft a professional email to a client",
@@ -16,6 +17,29 @@ const examplePrompts = [
 
 const WelcomeView: React.FC<WelcomeViewProps> = ({ onSubmit, isLoading }) => {
   const [prompt, setPrompt] = useState('');
+  const [examplePrompts, setExamplePrompts] = useState<string[]>([]);
+  const [examplesLoading, setExamplesLoading] = useState(true);
+
+  useEffect(() => {
+    const loadTrendingPrompts = async () => {
+      setExamplesLoading(true);
+      try {
+        const trendingPrompts = await fetchTrendingPrompts();
+        if (trendingPrompts.length > 0) {
+          setExamplePrompts(trendingPrompts);
+        } else {
+          setExamplePrompts(defaultExamplePrompts);
+        }
+      } catch (error) {
+        console.error("Failed to fetch trending prompts, using default examples.", error);
+        setExamplePrompts(defaultExamplePrompts);
+      } finally {
+        setExamplesLoading(false);
+      }
+    };
+
+    loadTrendingPrompts();
+  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,20 +75,26 @@ const WelcomeView: React.FC<WelcomeViewProps> = ({ onSubmit, isLoading }) => {
             autoFocus
           />
           <div className="mt-8">
-            <p className="text-slate-500 mb-3 text-sm">Or try an example:</p>
+            <p className="text-slate-500 mb-3 text-sm">Or try a trending example:</p>
             <div className="flex flex-wrap items-center justify-center gap-2">
-              {examplePrompts.map((ex, index) => (
-                <button
-                  key={index}
-                  type="button"
-                  onClick={() => setPrompt(ex)}
-                  disabled={isLoading}
-                  className="px-3 py-1.5 text-sm text-rose-700 bg-rose-100 rounded-full hover:bg-rose-200 disabled:bg-rose-50 disabled:text-rose-300 transition-colors"
-                  title="Use this example prompt"
-                >
-                  {ex}
-                </button>
-              ))}
+              {examplesLoading ? (
+                 Array.from({ length: 5 }).map((_, index) => (
+                  <div key={index} className="px-3 py-1.5 h-8 w-64 bg-rose-100 rounded-full animate-pulse"></div>
+                ))
+              ) : (
+                examplePrompts.map((ex, index) => (
+                  <button
+                    key={index}
+                    type="button"
+                    onClick={() => setPrompt(ex)}
+                    disabled={isLoading}
+                    className="px-3 py-1.5 text-sm text-rose-700 bg-rose-100 rounded-full hover:bg-rose-200 disabled:bg-rose-50 disabled:text-rose-300 transition-colors"
+                    title="Use this example prompt"
+                  >
+                    {ex}
+                  </button>
+                ))
+              )}
             </div>
           </div>
           <button
