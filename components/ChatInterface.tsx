@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { ChatMessage } from '../types';
 import { SendIcon, UserIcon, BotIcon } from './icons';
 import InitialBotMessage from './InitialBotMessage';
@@ -14,11 +14,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ chatHistory, onChatSubmit
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
-  }, [chatHistory, isStreaming]);
+  }, [chatHistory, isStreaming, chatHistory[chatHistory.length - 1]?.content]);
   
   // Auto-resize textarea
   useEffect(() => {
@@ -53,9 +53,14 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ chatHistory, onChatSubmit
     <div className="flex-1 flex flex-col min-h-0">
       <div ref={chatContainerRef} className="flex-1 p-4 space-y-4 overflow-y-auto scrollbar-thin">
         {chatHistory.map((chat, index) => {
+          // The very first bot message gets special rendering
           if (index === 0 && chat.role === 'model' && chat.content.includes('**Questions to Improve:**')) {
              return <InitialBotMessage key={index} content={chat.content} />;
           }
+
+          // Handle the streaming case for the last message
+          const isLastMessageStreaming = isStreaming && index === chatHistory.length - 1;
+
           return (
             <div key={index} className={`flex items-start gap-3 ${chat.role === 'user' ? 'justify-end' : ''}`}>
               {chat.role === 'model' && <BotIcon className="h-8 w-8 flex-shrink-0 text-rose-500 bg-rose-100 p-1.5 rounded-full" />}
@@ -64,13 +69,16 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ chatHistory, onChatSubmit
                   ? 'bg-rose-500 text-white'
                   : 'bg-white text-slate-700 border border-rose-200/80'
               }`}>
-                <p className="text-sm whitespace-pre-wrap">{chat.content}</p>
+                <p className="text-sm whitespace-pre-wrap">
+                  {chat.content}
+                  {isLastMessageStreaming && <span className="inline-block w-2 h-4 bg-slate-600 animate-pulse ml-1" aria-hidden="true"></span>}
+                </p>
               </div>
               {chat.role === 'user' && <UserIcon className="h-8 w-8 flex-shrink-0 text-slate-500 bg-slate-100 p-1.5 rounded-full" />}
             </div>
           );
         })}
-        {isStreaming && (
+        {isStreaming && chatHistory[chatHistory.length -1]?.role !== 'model' && (
            <div className="flex items-start gap-3">
              <BotIcon className="h-8 w-8 flex-shrink-0 text-rose-500 bg-rose-100 p-1.5 rounded-full" />
              <div className="max-w-md p-3 rounded-xl bg-white border border-rose-200/80">
@@ -96,7 +104,12 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ chatHistory, onChatSubmit
             style={{maxHeight: '200px'}}
             disabled={isStreaming}
           />
-          <button type="submit" disabled={isStreaming || !message.trim()} className="absolute right-3 bottom-3 p-2 bg-rose-500 text-white rounded-full hover:bg-rose-600 disabled:bg-rose-200 disabled:cursor-not-allowed transition-colors">
+          <button 
+            type="submit" 
+            disabled={isStreaming || !message.trim()} 
+            className="absolute right-3 bottom-3 p-2 bg-rose-500 text-white rounded-full hover:bg-rose-600 disabled:bg-rose-200 disabled:cursor-not-allowed transition-colors"
+            title="Send Message (Ctrl+Enter)"
+          >
             <SendIcon className="h-5 w-5" />
           </button>
         </form>

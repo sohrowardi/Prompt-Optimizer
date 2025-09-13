@@ -3,6 +3,7 @@ import { PromptVersion, ChatMessage } from '../types';
 import ChatInterface from './ChatInterface';
 import ActivePrompt from './ActivePrompt';
 import { RocketIcon } from './icons';
+import { WorkspaceViewSkeleton } from './skeletons';
 
 interface WorkspaceViewProps {
   activePrompt: PromptVersion;
@@ -10,6 +11,7 @@ interface WorkspaceViewProps {
   onChatSubmit: (message: string) => void;
   onStartImprovement: () => void;
   isStreaming: boolean;
+  isLoading: boolean;
 }
 
 const WorkspaceView: React.FC<WorkspaceViewProps> = ({
@@ -18,7 +20,13 @@ const WorkspaceView: React.FC<WorkspaceViewProps> = ({
   onChatSubmit,
   onStartImprovement,
   isStreaming,
+  isLoading,
 }) => {
+  // When loading (e.g., after 10x cycle), show a skeleton loader.
+  if (isLoading) {
+    return <WorkspaceViewSkeleton />;
+  }
+  
   return (
     <div className="flex-1 flex flex-row min-h-0 gap-6">
       <div className="flex-1 basis-1/2 flex flex-col">
@@ -33,8 +41,9 @@ const WorkspaceView: React.FC<WorkspaceViewProps> = ({
           </div>
           <button
               onClick={onStartImprovement}
-              disabled={isStreaming}
+              disabled={isStreaming || isLoading}
               className="flex items-center justify-center gap-2 px-5 py-2.5 text-md font-semibold text-white bg-rose-500 rounded-lg shadow-lg hover:bg-rose-600 disabled:bg-rose-200 disabled:text-rose-400 disabled:cursor-not-allowed transition-all duration-300"
+              title="Begin the automated 10x improvement process"
             >
               <RocketIcon className="h-5 w-5" />
               Start 10x Improvement

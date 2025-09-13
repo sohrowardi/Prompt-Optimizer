@@ -30,7 +30,7 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ history, onSelect, activePr
             <h2 className="text-lg font-semibold text-slate-800">Prompt History</h2>
             <p className="text-sm text-slate-500">Latest is at the top.</p>
         </div>
-        <button onClick={onReset} className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-slate-600 bg-rose-100/50 rounded-md hover:bg-rose-100 transition-colors" title="Start New Session">
+        <button onClick={onReset} className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-slate-600 bg-rose-100/50 rounded-md hover:bg-rose-100 transition-colors" title="Start a new session and clear history">
             <NewFileIcon className="h-4 w-4" />
             New
         </button>
@@ -42,6 +42,7 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ history, onSelect, activePr
             <div
               key={prompt.id}
               onClick={() => onSelect(prompt.id)}
+              title="Select this prompt version"
               className={`p-4 border-b border-rose-100 cursor-pointer group transition-colors relative ${
                 isActive
                   ? 'bg-rose-500/10'
@@ -55,7 +56,7 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ history, onSelect, activePr
                 <button
                   onClick={(e) => handleCopy(e, prompt.content)}
                   className="p-1.5 text-slate-500 rounded-md hover:text-slate-800 hover:bg-rose-100 opacity-0 group-hover:opacity-100 transition-all absolute top-2 right-2"
-                  title="Copy prompt"
+                  title="Copy prompt content"
                 >
                   <CopyIcon className="h-4 w-4" />
                 </button>

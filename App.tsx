@@ -1,6 +1,6 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { AppState, PromptVersion, ChatMessage, ImprovementLog } from './types';
-import { initialEnhance, refineInChat, runEvaluationStream, runRefinementStream, generateCritiqueAndQuestions } from './services/geminiService';
+import { initialEnhance, refineInChatStream, runEvaluationStream, runRefinementStream, generateCritiqueAndQuestions } from './services/geminiService';
 import HistoryPanel from './components/HistoryPanel';
 import WelcomeView from './components/WelcomeView';
 import WorkspaceView from './components/WorkspaceView';
@@ -9,8 +9,35 @@ import { LogoIcon, HistoryIcon } from './components/icons';
 
 const App: React.FC = () => {
   const [appState, setAppState] = useState<AppState>(AppState.INITIAL);
-  const [promptHistory, setPromptHistory] = useState<PromptVersion[]>([]);
-  const [activePromptId, setActivePromptId] = useState<number | null>(null);
+  
+  const [promptHistory, setPromptHistory] = useState<PromptVersion[]>(() => {
+    try {
+      const savedHistory = localStorage.getItem('promptHistory');
+      return savedHistory ? JSON.parse(savedHistory) : [];
+    } catch (error) {
+      console.error("Failed to parse prompt history from localStorage", error);
+      return [];
+    }
+  });
+
+  const [activePromptId, setActivePromptId] = useState<number | null>(() => {
+    try {
+      const savedId = localStorage.getItem('activePromptId');
+      if (savedId) {
+        const id = JSON.parse(savedId);
+        // Check if a prompt with this ID actually exists in the loaded history
+        const history = JSON.parse(localStorage.getItem('promptHistory') || '[]');
+        if (history.some((p: PromptVersion) => p.id === id)) {
+          return id;
+        }
+      }
+      return null;
+    } catch (error) {
+      console.error("Failed to parse active prompt ID from localStorage", error);
+      return null;
+    }
+  });
+  
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [improvementLog, setImprovementLog] = useState<ImprovementLog[]>([]);
   
@@ -19,6 +46,36 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isHistoryPanelOpen, setIsHistoryPanelOpen] = useState(false);
   
+  // Auto-save history and active prompt ID to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('promptHistory', JSON.stringify(promptHistory));
+    } catch (error) {
+      console.error("Failed to save prompt history to localStorage", error);
+    }
+  }, [promptHistory]);
+
+  useEffect(() => {
+    try {
+      if (activePromptId !== null) {
+        localStorage.setItem('activePromptId', JSON.stringify(activePromptId));
+      } else {
+        localStorage.removeItem('activePromptId');
+      }
+    } catch (error) {
+      console.error("Failed to save active prompt ID to localStorage", error);
+    }
+  }, [activePromptId]);
+
+  // Determine initial app state based on loaded data
+  useEffect(() => {
+    if (activePromptId !== null && promptHistory.length > 0) {
+      setAppState(AppState.REFINING);
+    } else {
+      setAppState(AppState.INITIAL);
+    }
+  }, []); // Run only once on mount
+
   const getActivePrompt = useCallback(() => {
     return promptHistory.find(p => p.id === activePromptId)
   }, [promptHistory, activePromptId]);
@@ -38,7 +95,7 @@ const App: React.FC = () => {
       setChatHistory([{ role: 'model', content: initialBotMessage }]);
       setAppState(AppState.REFINING);
     } catch (e) {
-      setError('Failed to generate initial prompt. Please check your API key and try again.');
+      setError((e as Error).message);
       console.error(e);
       setPromptHistory([]); // Clear history on failure
     } finally {
@@ -52,22 +109,36 @@ const App: React.FC = () => {
     
     setIsStreaming(true);
     setError(null);
-    const updatedChatHistory: ChatMessage[] = [...chatHistory, { role: 'user', content: message }];
-    setChatHistory(updatedChatHistory);
+    const currentChatHistory: ChatMessage[] = [...chatHistory, { role: 'user', content: message }];
+    setChatHistory([...currentChatHistory, { role: 'model', content: '' }]); // Add placeholder
 
     try {
-      const { response, newPrompt } = await refineInChat(activePrompt.content, updatedChatHistory);
-      setChatHistory([...updatedChatHistory, { role: 'model', content: response }]);
+      const { newPrompt } = await refineInChatStream(
+        activePrompt.content, 
+        currentChatHistory,
+        (chunk) => {
+          setChatHistory(prev => {
+            const newHistory = [...prev];
+            const lastMessage = newHistory[newHistory.length - 1];
+            if (lastMessage && lastMessage.role === 'model') {
+                lastMessage.content += chunk;
+            }
+            return newHistory;
+          });
+        }
+      );
       
       if (newPrompt) {
-        const newId = promptHistory.length + 1;
+        const newId = promptHistory.length > 0 ? Math.max(...promptHistory.map(p => p.id)) + 1 : 1;
         const version: PromptVersion = { id: newId, content: newPrompt, type: 'Refined' };
         setPromptHistory(prev => [version, ...prev]);
         setActivePromptId(newId);
       }
     } catch (e) {
-      setError('Failed to get chat response. Please try again.');
+      setError((e as Error).message);
       console.error(e);
+      // Remove placeholder on error
+      setChatHistory(prev => prev.slice(0, -1));
     } finally {
       setIsStreaming(false);
     }
@@ -104,18 +175,18 @@ const App: React.FC = () => {
       });
 
       // Step 3: Create new prompt version
-      const newId = promptHistory.length + 1;
+      const newId = promptHistory.length > 0 ? Math.max(...promptHistory.map(p => p.id)) + 1 : 1;
       const version: PromptVersion = { id: newId, content: improvedPrompt, type: '10x' };
       setPromptHistory(prev => [version, ...prev]);
       setActivePromptId(newId);
 
     } catch (e) {
-      setError('The improvement cycle failed. Please try again.');
+      setError((e as Error).message);
       console.error(e);
     } finally {
       setIsLoading(false);
     }
-  }, [getActivePrompt, promptHistory.length, improvementLog]);
+  }, [getActivePrompt, promptHistory, improvementLog]);
 
   const handleFinishImprovement = useCallback(async () => {
     setIsLoading(true);
@@ -134,7 +205,7 @@ const App: React.FC = () => {
       const initialBotMessage = await generateCritiqueAndQuestions(latestPrompt.content);
       setChatHistory([{ role: 'model', content: initialBotMessage }]);
     } catch (e) {
-      setError('Failed to generate analysis for the new prompt. You can start chatting to refine it manually.');
+      setError((e as Error).message);
       console.error(e);
       setChatHistory([]); // Reset on failure
     } finally {
@@ -159,6 +230,9 @@ const App: React.FC = () => {
     setError(null);
     setIsLoading(false);
     setIsStreaming(false);
+    // Clear localStorage
+    localStorage.removeItem('promptHistory');
+    localStorage.removeItem('activePromptId');
   };
   
   const renderContent = () => {
@@ -167,14 +241,19 @@ const App: React.FC = () => {
         return <WelcomeView onSubmit={handleInitialSubmit} isLoading={isLoading} />;
       case AppState.REFINING:
         const activePrompt = getActivePrompt();
-        if (!activePrompt) return <div className="text-center text-red-500">Error: No active prompt found.</div>;
+        if (!activePrompt) {
+            // This can happen if history is cleared or corrupted. Reset to a safe state.
+             if (!isLoading) { handleReset(); }
+             return <div className="text-center text-slate-500">Loading session...</div>;
+        }
         return (
           <WorkspaceView 
             activePrompt={activePrompt}
             chatHistory={chatHistory}
             onChatSubmit={handleChatSubmit}
             onStartImprovement={handleStartImprovement}
-            isStreaming={isStreaming || isLoading} // Pass isLoading here for the post-10x analysis
+            isLoading={isLoading}
+            isStreaming={isStreaming}
           />
         );
       case AppState.IMPROVING:
@@ -202,7 +281,7 @@ const App: React.FC = () => {
       <main className="flex-1 flex flex-col p-4 md:p-6 lg:p-8 overflow-y-auto relative">
          <header className="flex justify-between items-center mb-6 flex-shrink-0">
           <div className="flex items-center gap-3">
-            <button onClick={() => setIsHistoryPanelOpen(!isHistoryPanelOpen)} className="p-2 rounded-md hover:bg-rose-100/80 transition-colors" title="Toggle History Panel">
+            <button onClick={() => setIsHistoryPanelOpen(!isHistoryPanelOpen)} className="p-2 rounded-md hover:bg-rose-100/80 transition-colors" title={isHistoryPanelOpen ? "Close History Panel" : "Open History Panel"}>
                 <HistoryIcon className="h-6 w-6 text-slate-500" />
             </button>
             <LogoIcon className="h-8 w-8 text-rose-500" />

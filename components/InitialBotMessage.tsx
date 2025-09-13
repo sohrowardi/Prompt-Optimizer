@@ -1,11 +1,41 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { InfoIcon, BotIcon } from './icons';
 
-interface InitialBotMessageProps {
-  content: string;
-}
+// A custom hook for the fast typewriter effect.
+const useFastTypewriter = (text: string) => {
+    const [displayedText, setDisplayedText] = useState('');
 
-const InitialBotMessage: React.FC<InitialBotMessageProps> = ({ content }) => {
+    useEffect(() => {
+        setDisplayedText('');
+        if (!text) return;
+
+        let index = 0;
+        const CHUNK_SIZE = 20; // Fast chunk size
+        let animationFrameId: number;
+
+        const animate = () => {
+            const nextIndex = Math.min(index + CHUNK_SIZE, text.length);
+            setDisplayedText(text.substring(0, nextIndex));
+            index = nextIndex;
+
+            if (index < text.length) {
+                animationFrameId = requestAnimationFrame(animate);
+            }
+        };
+        animationFrameId = requestAnimationFrame(animate);
+
+        return () => cancelAnimationFrame(animationFrameId);
+    }, [text]);
+
+    return displayedText;
+};
+
+const StreamingMessagePart: React.FC<{ content: string }> = ({ content }) => {
+    const displayedContent = useFastTypewriter(content);
+    return <p className="text-sm whitespace-pre-wrap">{displayedContent}</p>;
+};
+
+const InitialBotMessage: React.FC<{ content: string }> = ({ content }) => {
   const [isDetailsVisible, setIsDetailsVisible] = useState(false);
 
   const { details, questions } = useMemo(() => {
@@ -13,12 +43,9 @@ const InitialBotMessage: React.FC<InitialBotMessageProps> = ({ content }) => {
     let detailsContent = (parts[0] || '').trim();
     const questionsContent = parts[1] ? `**Questions to Improve:**${parts[1]}`.trim() : '';
     
-    // If the details part is empty (e.g., model forgot the critique), provide a helpful fallback.
-    // This ensures the "Prompt Analysis" button is always visible.
     if (!detailsContent && questionsContent) {
         detailsContent = `**Critique:**\n[My apologies, I did not provide a critique in my analysis. You can ask for one in the chat.]`;
     } else if (!detailsContent && !questionsContent) {
-        // This case handles a more severe failure where neither part is present.
         detailsContent = `[My apologies, I was unable to generate an analysis for this prompt.]`;
     }
 
@@ -37,17 +64,20 @@ const InitialBotMessage: React.FC<InitialBotMessageProps> = ({ content }) => {
             onClick={() => setIsDetailsVisible(!isDetailsVisible)}
             className="flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-800 transition-colors"
             aria-expanded={isDetailsVisible}
+            title="Toggle visibility of the prompt critique and analysis"
           >
             <InfoIcon className="h-5 w-5" />
             <span>{isDetailsVisible ? 'Hide' : 'Show'} Prompt Analysis</span>
           </button>
           {isDetailsVisible && (
             <div className="mt-2 pl-1 border-l-2 border-rose-200">
-              <p className="text-sm whitespace-pre-wrap pl-3">{details}</p>
+              <div className="text-sm whitespace-pre-wrap pl-3">
+                <StreamingMessagePart content={details} />
+              </div>
             </div>
           )}
         </div>
-        {questions && <p className="text-sm whitespace-pre-wrap">{questions}</p>}
+        {questions && <StreamingMessagePart content={questions} />}
       </div>
     </div>
   );

@@ -9,6 +9,27 @@ if (!process.env.API_KEY) {
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 const model = 'gemini-2.5-flash';
 
+const handleGeminiError = (error: unknown, context: string): Error => {
+    console.error(`Gemini API call failed during ${context}:`, error);
+    let message = `An unexpected error occurred during ${context}. Please try again.`;
+    if (error instanceof Error) {
+        if (error.message.includes('API key not valid')) {
+            message = "Your API Key is invalid or missing. Please ensure it is configured correctly in your environment.";
+        } else if (error.message.includes('400')) {
+            message = `The request was invalid (${context}). Please check the prompt content and try again.`;
+        } else if (error.message.includes('500') || error.message.includes('503')) {
+            message = `The AI model service is currently unavailable or overloaded (${context}). Please try again later.`;
+        } else if (error.message.toLowerCase().includes('network error')) {
+            message = `A network error occurred. Please check your internet connection and try again.`;
+        } else {
+             // Keep a generic but contextual message for other errors
+            message = `An error occurred while trying to ${context.toLowerCase()}. Please see the console for details.`;
+        }
+    }
+    return new Error(message);
+};
+
+
 // This is a non-streaming helper for initial enhancement and chat, which don't have a streaming UI.
 const generate = async (prompt: string): Promise<string> => {
     try {
@@ -18,48 +39,62 @@ const generate = async (prompt: string): Promise<string> => {
         });
         return response.text.trim();
     } catch (error) {
-        console.error("Gemini API call failed:", error);
-        throw new Error("Failed to communicate with the Gemini API.");
+        throw handleGeminiError(error, "content generation");
     }
 };
+
+/**
+ * Extracts a specific section from a larger text block based on a markdown heading.
+ * @param text The full text to search within.
+ * @param title The heading of the section to extract (e.g., "Prompt", "Critique").
+ * @param isCodeBlock Whether the content is expected to be in a markdown code block.
+ * @returns The trimmed content of the section, or null if not found.
+ */
+const extractSection = (text: string, title: string, isCodeBlock: boolean): string | null => {
+    const pattern = isCodeBlock
+        ? `\\*\\*${title}:\\*\\*\\s*\\\`\\\`\\\`([\\s\\S]+?)\\\`\\\`\\\``
+        : `\\*\\*${title}:\\*\\*([\\s\\S]*?)(?=\\s*\\*\\*|$)`;
+    
+    const regex = new RegExp(pattern, 'm');
+    const match = text.match(regex);
+    
+    return match && match[1] ? match[1].trim() : null;
+};
+
 
 export const initialEnhance = async (userPrompt: string): Promise<{ enhancedPrompt: string; initialBotMessage: string; }> => {
     const prompt = PROMPT_1.replace('{{USER_PROMPT}}', userPrompt);
     const fullResponse = await generate(prompt);
 
-    const promptRegex = /\*\*Prompt:\*\*\s*\`\`\`\s*([\s\S]+?)\s*\`\`\`/m;
-    const match = fullResponse.match(promptRegex);
-    
-    if (!match || !match[1]) {
-        console.error("Could not parse prompt from PROMPT_1 response:", fullResponse);
+    const enhancedPrompt = extractSection(fullResponse, 'Prompt', true);
+    const critique = extractSection(fullResponse, 'Critique', false);
+    const questions = extractSection(fullResponse, 'Questions to Improve', false);
+
+    if (!enhancedPrompt) {
+        console.error("Could not parse enhanced prompt from Gemini response:", fullResponse);
         return {
-            enhancedPrompt: "Sorry, I had trouble generating a prompt. Please try a different input.",
-            initialBotMessage: `I failed to structure my response correctly. Here is my raw output:\n\n${fullResponse}`
+            enhancedPrompt: "Sorry, I had trouble generating a prompt. Your original prompt has been saved.",
+            initialBotMessage: `I failed to structure my response correctly, so I couldn't extract the enhanced prompt. Here is my raw output, please try refining it in the chat:\n\n${fullResponse}`
         };
     }
     
-    const enhancedPrompt = match[1].trim();
-    const promptBlock = match[0];
-
-    // The rest of the message is everything after the full prompt block.
-    const promptBlockEndIndex = fullResponse.indexOf(promptBlock) + promptBlock.length;
-    let initialBotMessage = fullResponse.substring(promptBlockEndIndex).trim();
-    
-    // Check if the model followed instructions. If not, build a helpful message.
-    if (!initialBotMessage.includes('**Critique:**') || !initialBotMessage.includes('**Questions to Improve:**')) {
-        let helpfulMessage = initialBotMessage;
-        if (!helpfulMessage) {
-            helpfulMessage = "My apologies, I generated a prompt but failed to provide the critique and questions.";
-        }
-        helpfulMessage += "\n\nLet's refine it together. What is the primary goal for this prompt?";
-        return { enhancedPrompt, initialBotMessage: helpfulMessage };
+    let initialBotMessage = '';
+    if (critique) {
+        initialBotMessage += `**Critique:**\n${critique}\n\n`;
+    }
+    if (questions) {
+        initialBotMessage += `**Questions to Improve:**\n${questions}`;
     }
 
-    return { enhancedPrompt, initialBotMessage };
+    // Fallback if both critique and questions are missing
+    if (!critique && !questions) {
+        initialBotMessage = "My apologies, I generated an enhanced prompt but failed to provide the usual critique and questions. We can refine it together here in the chat. What would you like to improve?";
+    }
+
+    return { enhancedPrompt, initialBotMessage: initialBotMessage.trim() };
 };
 
-
-export const refineInChat = async (currentPrompt: string, chatHistory: ChatMessage[]): Promise<{ response: string; newPrompt: string | null }> => {
+export const refineInChatStream = async (currentPrompt: string, chatHistory: ChatMessage[], onChunk: (chunk: string) => void): Promise<{ newPrompt: string | null }> => {
     const systemInstruction = CHAT_SYSTEM_INSTRUCTION.replace('{{CURRENT_PROMPT}}', currentPrompt);
 
     const chat = ai.chats.create({
@@ -72,15 +107,29 @@ export const refineInChat = async (currentPrompt: string, chatHistory: ChatMessa
     });
     
     const lastMessage = chatHistory[chatHistory.length - 1];
-    const result = await chat.sendMessage({ message: lastMessage.content });
+    let fullResponse = '';
 
-    const responseText = result.text.trim();
-    const promptRegex = /```([\s\S]*?)```/;
-    const match = responseText.match(promptRegex);
-    const newPrompt = match ? match[1].trim() : null;
+    try {
+        const result = await chat.sendMessageStream({ message: lastMessage.content });
 
-    return { response: responseText, newPrompt };
+        for await (const chunk of result) {
+            const textChunk = chunk.text;
+            if (textChunk) {
+                fullResponse += textChunk;
+                onChunk(textChunk);
+            }
+        }
+
+        const promptRegex = /```([\s\S]*?)```/;
+        const match = fullResponse.match(promptRegex);
+        const newPrompt = match ? match[1].trim() : null;
+        return { newPrompt };
+
+    } catch (error) {
+        throw handleGeminiError(error, 'streaming chat refinement');
+    }
 };
+
 
 export const generateCritiqueAndQuestions = async (promptToAnalyze: string): Promise<string> => {
     const prompt = PROMPT_4.replace('{{PROMPT_TO_ANALYZE}}', promptToAnalyze);
@@ -113,8 +162,7 @@ export const runEvaluationStream = async (promptToCritique: string, onChunk: (ch
             }
         }
     } catch (error) {
-        console.error("Gemini API stream call for evaluation:", error);
-        throw new Error("Failed to stream evaluation from the Gemini API.");
+        throw handleGeminiError(error, "streaming evaluation");
     }
     return fullText;
 };
@@ -136,8 +184,7 @@ export const runRefinementStream = async (promptToImprove: string, critique: str
             }
         }
     } catch (error) {
-        console.error("Gemini API stream call for refinement:", error);
-        throw new Error("Failed to stream refinement from the Gemini API.");
+        throw handleGeminiError(error, "streaming refinement");
     }
 
     const promptRegex = /```([\s\S]*?)```/m;

@@ -6,6 +6,14 @@ interface WelcomeViewProps {
   isLoading: boolean;
 }
 
+const examplePrompts = [
+  "Explain quantum computing in simple terms",
+  "Write a python script to scrape a website",
+  "Draft a professional email to a client",
+  "Create a 3-day itinerary for a trip to Paris",
+  "Generate a list of creative blog post ideas",
+];
+
 const WelcomeView: React.FC<WelcomeViewProps> = ({ onSubmit, isLoading }) => {
   const [prompt, setPrompt] = useState('');
 
@@ -42,10 +50,28 @@ const WelcomeView: React.FC<WelcomeViewProps> = ({ onSubmit, isLoading }) => {
             disabled={isLoading}
             autoFocus
           />
+          <div className="mt-8">
+            <p className="text-slate-500 mb-3 text-sm">Or try an example:</p>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              {examplePrompts.map((ex, index) => (
+                <button
+                  key={index}
+                  type="button"
+                  onClick={() => setPrompt(ex)}
+                  disabled={isLoading}
+                  className="px-3 py-1.5 text-sm text-rose-700 bg-rose-100 rounded-full hover:bg-rose-200 disabled:bg-rose-50 disabled:text-rose-300 transition-colors"
+                  title="Use this example prompt"
+                >
+                  {ex}
+                </button>
+              ))}
+            </div>
+          </div>
           <button
             type="submit"
             disabled={isLoading || !prompt.trim()}
-            className="mt-6 w-full flex items-center justify-center gap-2 px-6 py-4 text-lg font-semibold text-white bg-rose-500 rounded-lg shadow-lg hover:bg-rose-600 disabled:bg-rose-200 disabled:text-rose-400 disabled:cursor-not-allowed transition-all duration-300 transform hover:scale-105"
+            className="mt-10 w-full flex items-center justify-center gap-2 px-6 py-4 text-lg font-semibold text-white bg-rose-500 rounded-lg shadow-lg hover:bg-rose-600 disabled:bg-rose-200 disabled:text-rose-400 disabled:cursor-not-allowed transition-all duration-300 transform hover:scale-105"
+            title="Enhance your prompt idea"
           >
             {isLoading ? (
               <div className="w-6 h-6 border-2 border-t-white border-rose-200 rounded-full animate-spin"></div>

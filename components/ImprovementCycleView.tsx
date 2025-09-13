@@ -1,43 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useLayoutEffect, useRef } from 'react';
 import { ImprovementLog } from '../types';
 import { CheckIcon, FinishIcon, RocketIcon } from './icons';
-
-// A component to render text with a typewriter effect, mimicking a rapid terminal update.
-const Typewriter: React.FC<{ text: string; scrollContainerRef: React.RefObject<HTMLDivElement> }> = ({ text, scrollContainerRef }) => {
-    const [displayedText, setDisplayedText] = useState('');
-    const textRef = useRef(text);
-
-    // Keep the ref updated with the latest full text from props
-    useEffect(() => {
-        textRef.current = text;
-    }, [text]);
-
-    useEffect(() => {
-        const interval = setInterval(() => {
-            // Animate from the current displayed text to the target text in the ref
-            if (displayedText.length < textRef.current.length) {
-                const nextLength = Math.min(
-                    displayedText.length + 25, // Render 25 characters per frame for a much faster feel
-                    textRef.current.length
-                );
-                setDisplayedText(textRef.current.substring(0, nextLength));
-            }
-        }, 16); // ~60 FPS
-
-        return () => clearInterval(interval);
-    }, [displayedText]); // This dependency makes the effect act like a render loop
-
-    // Auto-scroll the container whenever the displayed text is updated
-    useEffect(() => {
-        if (scrollContainerRef.current) {
-            scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
-        }
-    }, [displayedText, scrollContainerRef]);
-
-    // Return a non-breaking space if empty to maintain container height
-    return <code>{displayedText || '\u00A0'}</code>;
-};
-
 
 // Helper to get cycle number from log entry title
 const getCycleNumberFromTitle = (title: string): number | null => {
@@ -47,7 +10,16 @@ const getCycleNumberFromTitle = (title: string): number | null => {
 
 // Sub-component for a single log entry (Evaluation or Refinement)
 const LogEntry: React.FC<{ entry: ImprovementLog; isStreaming: boolean; }> = ({ entry, isStreaming }) => {
-    const scrollRef = useRef<HTMLDivElement>(null);
+    const endOfLogRef = useRef<HTMLDivElement>(null);
+
+    // This effect ensures that as new content streams in, the view automatically
+    // scrolls to the bottom, keeping the latest text visible.
+    useLayoutEffect(() => {
+        // scrollIntoView is a reliable way to scroll to the end of the content.
+        // 'auto' behavior ensures the scroll is instant, not animated.
+        endOfLogRef.current?.scrollIntoView({ behavior: 'auto' });
+    }, [entry.content]);
+
 
     return (
         <div className="bg-rose-50/50 p-4 rounded-lg border border-rose-100 flex-1 basis-1/2">
@@ -59,26 +31,31 @@ const LogEntry: React.FC<{ entry: ImprovementLog; isStreaming: boolean; }> = ({ 
                 )}
                 {entry.title.substring(entry.title.indexOf(': ') + 2)}
             </h4>
-            <div ref={scrollRef} className="mt-2 ml-9 max-h-80 overflow-y-auto bg-white/50 p-3 rounded-md border border-rose-100 scrollbar-thin">
+            <div className="mt-2 ml-9 max-h-80 overflow-y-auto bg-white/50 p-3 rounded-md border border-rose-100 scrollbar-thin">
                 <pre className="whitespace-pre-wrap break-words font-mono text-slate-600 text-xs">
-                    <Typewriter text={entry.content} scrollContainerRef={scrollRef} />
+                    {/* The content is rendered directly for maximum speed. */}
+                    <code>{entry.content || '\u00A0'}</code>
                 </pre>
+                {/* This empty div acts as an anchor to scroll to the bottom of the content. */}
+                <div ref={endOfLogRef} />
             </div>
         </div>
     );
 };
 
 // Sub-component for a placeholder log entry
-const LogPlaceholder: React.FC<{ title: string; message: string; }> = ({ title, message }) => (
-    <div className="bg-rose-50/50 p-4 rounded-lg border border-rose-100 flex-1 basis-1/2 opacity-60">
+const LogPlaceholder: React.FC<{ title: string; }> = ({ title }) => (
+    <div className="bg-rose-50/50 p-4 rounded-lg border border-rose-100 flex-1 basis-1/2 animate-pulse">
         <h4 className="flex items-center gap-3 font-semibold text-lg text-slate-800 mb-2">
             <div className="w-5 h-5 border-2 border-rose-100 rounded-full flex-shrink-0 ml-0.5"></div>
             {title}
         </h4>
-        <div className="mt-2 ml-9 max-h-80 overflow-y-auto bg-white/50 p-3 rounded-md border border-rose-100 scrollbar-thin">
-            <pre className="whitespace-pre-wrap break-words font-mono text-slate-600 text-xs">
-                {message}
-            </pre>
+        <div className="mt-2 ml-9 max-h-80 bg-white/50 p-3 rounded-md border border-rose-100">
+             <div className="space-y-2.5">
+                <div className="h-3 bg-rose-200 rounded w-full"></div>
+                <div className="h-3 bg-rose-200 rounded w-5/6"></div>
+                <div className="h-3 bg-rose-200 rounded w-full"></div>
+             </div>
         </div>
     </div>
 );
@@ -122,7 +99,7 @@ const ImprovementCycleView: React.FC<{ log: ImprovementLog[], onRunAgain: () => 
                                         isStreaming={isLoading && log[log.length-1]?.id === refinementEntry.id} 
                                     />
                                 ) : (
-                                    evaluationEntry && <LogPlaceholder title="Refining Prompt..." message="Awaiting evaluation..." />
+                                    evaluationEntry && <LogPlaceholder title="Refining Prompt..." />
                                 )}
                             </div>
                         </div>
@@ -134,6 +111,7 @@ const ImprovementCycleView: React.FC<{ log: ImprovementLog[], onRunAgain: () => 
                     onClick={onRunAgain}
                     disabled={isLoading}
                     className="flex items-center justify-center gap-2 px-6 py-3 text-md font-semibold text-white bg-rose-500 rounded-lg shadow-lg hover:bg-rose-600 disabled:bg-rose-200 disabled:text-rose-400 disabled:cursor-not-allowed transition-all"
+                    title="Run another automated evaluation and refinement cycle"
                 >
                     {isLoading ? (
                         <div className="w-5 h-5 border-2 border-t-white border-rose-200 rounded-full animate-spin"></div>
@@ -146,6 +124,7 @@ const ImprovementCycleView: React.FC<{ log: ImprovementLog[], onRunAgain: () => 
                     onClick={onFinish}
                     disabled={isLoading}
                     className="flex items-center justify-center gap-2 px-6 py-3 text-md font-semibold text-rose-700 bg-rose-100 rounded-lg shadow-lg hover:bg-rose-200 disabled:bg-rose-50 disabled:cursor-not-allowed disabled:text-rose-300 transition-all"
+                    title="Finish and return to the chat refinement studio"
                 >
                     <FinishIcon className="h-5 w-5" />
                     Finish & Return
