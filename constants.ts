@@ -1,4 +1,3 @@
-
 export const PROMPT_1 = `You are an advanced AI specializing in crafting the most effective and contextually optimized prompts. Your primary objective is to take a user's basic idea and transform it into a professional, structured prompt.
 
 The user's basic idea is:
@@ -21,6 +20,14 @@ Generate an improved, professional version of this prompt. Then, provide a criti
 
 **Questions to Improve:**
 [A numbered list of clarifying questions for the user.]
+
+---
+**Structure Checklist:**
+Before responding, ensure your output contains:
+1. The \`**Prompt:**\` heading with a code block.
+2. The \`**Critique:**\` heading with your analysis.
+3. The \`**Questions to Improve:**\` heading with a numbered list.
+Your response will be parsed programmatically. Adherence to this structure is mandatory.
 `;
 
 export const PROMPT_2 = `Designed to **evaluate prompts** using a structured 35-criteria rubric with clear scoring, critique, and actionable refinement suggestions.
@@ -266,4 +273,23 @@ VERY IMPORTANT: You MUST wrap the final, revised prompt in a markdown code block
 \`\`\`
 This is the only way the system can extract your revision. Do not forget the backticks.
 If you are just having a conversation, do not use the code block. Only use it when you are outputting the final, revised version of the prompt for the user.
+`;
+
+export const PROMPT_4 = `You are an advanced AI specializing in analyzing and improving prompts. Your task is to analyze an existing prompt, provide a critique, and suggest ways to improve it.
+
+The prompt to analyze is:
+\`\`\`
+{{PROMPT_TO_ANALYZE}}
+\`\`\`
+
+**Your Task:**
+Provide a critique of this prompt and ask clarifying questions to help the user refine it further.
+
+**Your response MUST follow this exact structure:**
+
+**Critique:**
+[Your analysis of the prompt's effectiveness, strengths, and suggestions for improvement.]
+
+**Questions to Improve:**
+[A numbered list of **up to 5** clarifying questions for the user.]
 `;

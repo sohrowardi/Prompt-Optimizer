@@ -16,6 +16,15 @@ const WelcomeView: React.FC<WelcomeViewProps> = ({ onSubmit, isLoading }) => {
     }
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && e.ctrlKey) {
+      e.preventDefault();
+      if (prompt.trim() && !isLoading) {
+        onSubmit(prompt.trim());
+      }
+    }
+  };
+
   return (
     <div className="flex-1 flex flex-col items-center justify-center text-center p-4">
       <div className="max-w-3xl w-full">
@@ -27,7 +36,8 @@ const WelcomeView: React.FC<WelcomeViewProps> = ({ onSubmit, isLoading }) => {
           <textarea
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
-            placeholder="e.g., 'write a story about a robot who discovers music'"
+            onKeyDown={handleKeyDown}
+            placeholder="e.g., 'write a story about a robot who discovers music' (Ctrl+Enter to submit)"
             className="w-full h-48 p-4 bg-white/80 backdrop-blur-sm border border-rose-200/80 rounded-lg text-lg text-slate-800 placeholder-slate-400 focus:ring-2 focus:ring-rose-500 focus:border-rose-500 transition-shadow resize-none"
             disabled={isLoading}
             autoFocus

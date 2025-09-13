@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { AppState, PromptVersion, ChatMessage, ImprovementLog } from './types';
-import { initialEnhance, refineInChat, runEvaluation, runRefinement } from './services/geminiService';
+import { initialEnhance, refineInChat, runEvaluationStream, runRefinementStream, generateCritiqueAndQuestions } from './services/geminiService';
 import HistoryPanel from './components/HistoryPanel';
 import WelcomeView from './components/WelcomeView';
 import WorkspaceView from './components/WorkspaceView';
@@ -19,7 +19,9 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isHistoryPanelOpen, setIsHistoryPanelOpen] = useState(false);
   
-  const getActivePrompt = () => promptHistory.find(p => p.id === activePromptId);
+  const getActivePrompt = useCallback(() => {
+    return promptHistory.find(p => p.id === activePromptId)
+  }, [promptHistory, activePromptId]);
 
   const handleInitialSubmit = useCallback(async (prompt: string) => {
     setIsLoading(true);
@@ -85,16 +87,23 @@ const App: React.FC = () => {
     setError(null);
     
     const cycleNumber = improvementLog.filter(log => log.type === 'evaluation').length + 1;
+    const evalLogId = `eval-${Date.now()}`;
+    const refineLogId = `refine-${Date.now()}`;
     
     try {
-      setImprovementLog(prev => [...prev, { type: 'evaluation', title: `Cycle ${cycleNumber}: Evaluating Prompt...`, content: '' }]);
-      const evaluation = await runEvaluation(activePrompt.content);
-      setImprovementLog(prev => prev.map(l => l.title.startsWith(`Cycle ${cycleNumber}: Evaluating`) ? { ...l, content: evaluation } : l));
+      // Step 1: Add evaluation placeholder and stream
+      setImprovementLog(prev => [...prev, { type: 'evaluation', id: evalLogId, title: `Cycle ${cycleNumber}: Evaluating Prompt...`, content: '' }]);
+      const evaluation = await runEvaluationStream(activePrompt.content, (chunk) => {
+        setImprovementLog(prev => prev.map(l => l.id === evalLogId ? { ...l, content: l.content + chunk } : l));
+      });
       
-      setImprovementLog(prev => [...prev, { type: 'refinement', title: `Cycle ${cycleNumber}: Refining Prompt...`, content: '' }]);
-      const { improvedPrompt, fullResponse } = await runRefinement(activePrompt.content, evaluation);
-      setImprovementLog(prev => prev.map(l => l.title.startsWith(`Cycle ${cycleNumber}: Refining`) ? { ...l, content: fullResponse } : l));
+      // Step 2: Add refinement placeholder and stream
+      setImprovementLog(prev => [...prev, { type: 'refinement', id: refineLogId, title: `Cycle ${cycleNumber}: Refining Prompt...`, content: '' }]);
+      const { improvedPrompt } = await runRefinementStream(activePrompt.content, evaluation, (chunk) => {
+        setImprovementLog(prev => prev.map(l => l.id === refineLogId ? { ...l, content: l.content + chunk } : l));
+      });
 
+      // Step 3: Create new prompt version
       const newId = promptHistory.length + 1;
       const version: PromptVersion = { id: newId, content: improvedPrompt, type: '10x' };
       setPromptHistory(prev => [version, ...prev]);
@@ -108,10 +117,30 @@ const App: React.FC = () => {
     }
   }, [getActivePrompt, promptHistory.length, improvementLog]);
 
-  const handleFinishImprovement = () => {
-    setAppState(AppState.REFINING);
-    setChatHistory([]); // Reset chat for the new prompt
-  };
+  const handleFinishImprovement = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    setAppState(AppState.REFINING); // Switch view immediately
+
+    const latestPrompt = getActivePrompt();
+    if (!latestPrompt) {
+      setChatHistory([]);
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      // Generate a new critique for the newly created 10x prompt
+      const initialBotMessage = await generateCritiqueAndQuestions(latestPrompt.content);
+      setChatHistory([{ role: 'model', content: initialBotMessage }]);
+    } catch (e) {
+      setError('Failed to generate analysis for the new prompt. You can start chatting to refine it manually.');
+      console.error(e);
+      setChatHistory([]); // Reset on failure
+    } finally {
+      setIsLoading(false);
+    }
+  }, [getActivePrompt]);
 
   const handleSelectHistory = (id: number) => {
     setActivePromptId(id);
@@ -145,7 +174,7 @@ const App: React.FC = () => {
             chatHistory={chatHistory}
             onChatSubmit={handleChatSubmit}
             onStartImprovement={handleStartImprovement}
-            isStreaming={isStreaming}
+            isStreaming={isStreaming || isLoading} // Pass isLoading here for the post-10x analysis
           />
         );
       case AppState.IMPROVING:

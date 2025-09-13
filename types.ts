@@ -19,6 +19,7 @@ export interface ChatMessage {
 }
 
 export interface ImprovementLog {
+    id: string;
     type: 'evaluation' | 'refinement';
     title: string;
     content: string;
