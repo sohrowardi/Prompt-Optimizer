@@ -2,7 +2,8 @@
 import React from 'react';
 import { ChatMessage } from '../types';
 import ChatInterface from './ChatInterface';
-import { CopyIcon, UpArrowIcon } from './icons';
+// fix: Use RocketIcon as UpArrowIcon is not exported from ./icons
+import { CopyIcon, RocketIcon } from './icons';
 
 interface MainInterfaceProps {
   currentPrompt: string;
@@ -45,7 +46,8 @@ const MainInterface: React.FC<MainInterfaceProps> = ({
         <ChatInterface
           chatHistory={chatHistory}
           onChatSubmit={onChatSubmit}
-          isLoading={isLoading}
+          // fix: Pass isLoading as the isStreaming prop, which is what ChatInterface expects.
+          isStreaming={isLoading}
         />
         <div className="p-4 border-t border-gray-700">
            <button
@@ -53,7 +55,7 @@ const MainInterface: React.FC<MainInterfaceProps> = ({
               disabled={isLoading}
               className="w-full flex items-center justify-center gap-2 px-6 py-3 text-md font-semibold text-white bg-green-600 rounded-lg shadow-lg hover:bg-green-700 disabled:bg-green-900/50 disabled:cursor-not-allowed disabled:text-gray-400 transition-all duration-300"
             >
-              <UpArrowIcon className="h-5 w-5" />
+              <RocketIcon className="h-5 w-5" />
               Make it 10x Better
             </button>
         </div>

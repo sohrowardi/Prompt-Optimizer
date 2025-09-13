@@ -6,10 +6,10 @@ import { SendIcon, UserIcon, BotIcon } from './icons';
 interface ChatInterfaceProps {
   chatHistory: ChatMessage[];
   onChatSubmit: (message: string) => void;
-  isLoading: boolean;
+  isStreaming: boolean;
 }
 
-const ChatInterface: React.FC<ChatInterfaceProps> = ({ chatHistory, onChatSubmit, isLoading }) => {
+const ChatInterface: React.FC<ChatInterfaceProps> = ({ chatHistory, onChatSubmit, isStreaming }) => {
   const [message, setMessage] = useState('');
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
@@ -21,7 +21,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ chatHistory, onChatSubmit
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (message.trim() && !isLoading) {
+    if (message.trim() && !isStreaming) {
       onChatSubmit(message.trim());
       setMessage('');
     }
@@ -29,11 +29,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ chatHistory, onChatSubmit
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      <div ref={chatContainerRef} className="flex-1 p-4 space-y-4 overflow-y-auto">
+      <div ref={chatContainerRef} className="flex-1 p-4 space-y-4 overflow-y-auto scrollbar-thin">
         {chatHistory.map((chat, index) => (
           <div key={index} className={`flex items-start gap-3 ${chat.role === 'user' ? 'justify-end' : ''}`}>
             {chat.role === 'model' && <BotIcon className="h-8 w-8 flex-shrink-0 text-indigo-400 bg-gray-700 p-1.5 rounded-full" />}
-            <div className={`max-w-md p-3 rounded-xl ${
+            <div className={`max-w-xl p-3 rounded-xl ${
               chat.role === 'user'
                 ? 'bg-indigo-600 text-white'
                 : 'bg-gray-700 text-gray-300'
@@ -43,7 +43,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ chatHistory, onChatSubmit
              {chat.role === 'user' && <UserIcon className="h-8 w-8 flex-shrink-0 text-gray-300 bg-gray-600 p-1.5 rounded-full" />}
           </div>
         ))}
-        {isLoading && chatHistory[chatHistory.length - 1]?.role === 'user' && (
+        {isStreaming && (
            <div className="flex items-start gap-3">
              <BotIcon className="h-8 w-8 flex-shrink-0 text-indigo-400 bg-gray-700 p-1.5 rounded-full" />
              <div className="max-w-md p-3 rounded-xl bg-gray-700 text-gray-300">
@@ -64,9 +64,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ chatHistory, onChatSubmit
             onChange={(e) => setMessage(e.target.value)}
             placeholder="Type your refinement here..."
             className="w-full pl-4 pr-12 py-3 bg-gray-700 border border-gray-600 rounded-full text-gray-200 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            disabled={isLoading}
+            disabled={isStreaming}
           />
-          <button type="submit" disabled={isLoading || !message.trim()} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 disabled:bg-indigo-900/50 disabled:cursor-not-allowed transition-colors">
+          <button type="submit" disabled={isStreaming || !message.trim()} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 disabled:bg-indigo-900/50 disabled:cursor-not-allowed transition-colors">
             <SendIcon className="h-5 w-5" />
           </button>
         </form>

@@ -1,149 +1,186 @@
+
 import React, { useState, useCallback } from 'react';
-import { AppState, ChatMessage } from './types';
-import { enhanceInitialPrompt, critiquePrompt, improvePrompt, continueChat } from './services/geminiService';
+import { AppState, PromptVersion, ChatMessage, ImprovementLog } from './types';
+import { initialEnhance, refineInChat, runEvaluation, runRefinement } from './services/geminiService';
 import HistoryPanel from './components/HistoryPanel';
-import PromptInput from './components/PromptInput';
-import MainInterface from './components/MainInterface';
-import LoadingOverlay from './components/LoadingOverlay';
+import WelcomeView from './components/WelcomeView';
+import WorkspaceView from './components/WorkspaceView';
+import ImprovementCycleView from './components/ImprovementCycleView';
 import { LogoIcon } from './components/icons';
 
 const App: React.FC = () => {
   const [appState, setAppState] = useState<AppState>(AppState.INITIAL);
-  const [initialPrompt, setInitialPrompt] = useState<string>('');
-  const [currentPrompt, setCurrentPrompt] = useState<string>('');
-  const [promptHistory, setPromptHistory] = useState<string[]>([]);
+  const [promptHistory, setPromptHistory] = useState<PromptVersion[]>([]);
+  const [activePromptId, setActivePromptId] = useState<number | null>(null);
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
+  const [improvementLog, setImprovementLog] = useState<ImprovementLog[]>([]);
+  
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isStreaming, setIsStreaming] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [improvementSteps, setImprovementSteps] = useState<string[]>([]);
+  
+  const getActivePrompt = () => promptHistory.find(p => p.id === activePromptId);
 
   const handleInitialSubmit = useCallback(async (prompt: string) => {
     setIsLoading(true);
     setError(null);
-    setInitialPrompt(prompt);
-    setPromptHistory([]);
-    setChatHistory([]);
+    const originalPrompt: PromptVersion = { id: 1, content: prompt, type: 'Original' };
+    setPromptHistory([originalPrompt]);
+
     try {
-      const { enhancedPrompt, initialBotMessage } = await enhanceInitialPrompt(prompt);
-      setCurrentPrompt(enhancedPrompt);
-      setPromptHistory([enhancedPrompt]);
-      if (initialBotMessage) {
-        setChatHistory([{ role: 'model', content: initialBotMessage }]);
-      }
+      const { enhancedPrompt, initialBotMessage } = await initialEnhance(prompt);
+      const enhanced: PromptVersion = { id: 2, content: enhancedPrompt, type: 'Enhanced' };
+      
+      setPromptHistory([enhanced, originalPrompt]);
+      setActivePromptId(2);
+      setChatHistory([{ role: 'model', content: initialBotMessage }]);
       setAppState(AppState.REFINING);
     } catch (e) {
-      setError('Failed to generate professional prompt. Please check your API key and try again.');
+      setError('Failed to generate initial prompt. Please check your API key and try again.');
       console.error(e);
+      setPromptHistory([]); // Clear history on failure
     } finally {
       setIsLoading(false);
     }
   }, []);
-
+  
   const handleChatSubmit = useCallback(async (message: string) => {
-    setIsLoading(true);
+    const activePrompt = getActivePrompt();
+    if (!activePrompt) return;
+    
+    setIsStreaming(true);
     setError(null);
     const updatedChatHistory: ChatMessage[] = [...chatHistory, { role: 'user', content: message }];
     setChatHistory(updatedChatHistory);
 
     try {
-      const { response, newPrompt } = await continueChat(currentPrompt, updatedChatHistory);
+      const { response, newPrompt } = await refineInChat(activePrompt.content, updatedChatHistory);
       setChatHistory([...updatedChatHistory, { role: 'model', content: response }]);
-      if (newPrompt && newPrompt !== currentPrompt) {
-        setCurrentPrompt(newPrompt);
-        setPromptHistory(prev => [newPrompt, ...prev]);
+      
+      if (newPrompt) {
+        const newId = promptHistory.length + 1;
+        const version: PromptVersion = { id: newId, content: newPrompt, type: 'Refined' };
+        setPromptHistory(prev => [version, ...prev]);
+        setActivePromptId(newId);
       }
     } catch (e) {
       setError('Failed to get chat response. Please try again.');
-      setChatHistory(updatedChatHistory); // revert to user message only
       console.error(e);
     } finally {
-      setIsLoading(false);
+      setIsStreaming(false);
     }
-  }, [chatHistory, currentPrompt]);
+  }, [chatHistory, getActivePrompt, promptHistory]);
+  
+  const handleStartImprovement = () => {
+    setAppState(AppState.IMPROVING);
+    setImprovementLog([]);
+    handleRunImprovementCycle();
+  };
+  
+  const handleRunImprovementCycle = useCallback(async () => {
+    const activePrompt = getActivePrompt();
+    if (!activePrompt) return;
 
-  const handleImprovementCycle = useCallback(async () => {
     setIsLoading(true);
     setError(null);
-    setAppState(AppState.IMPROVING_10X);
-    setImprovementSteps([]);
-
+    
+    const cycleNumber = improvementLog.filter(log => log.type === 'evaluation').length + 1;
+    
     try {
-      setImprovementSteps(prev => [...prev, 'Performing detailed 35-point evaluation...']);
-      const critique = await critiquePrompt(currentPrompt);
-
-      setImprovementSteps(prev => [...prev, 'Revising prompt based on evaluation report...']);
-      const improvedPrompt = await improvePrompt(currentPrompt, critique);
+      setImprovementLog(prev => [...prev, { type: 'evaluation', title: `Cycle ${cycleNumber}: Evaluating Prompt...`, content: '' }]);
+      const evaluation = await runEvaluation(activePrompt.content);
+      setImprovementLog(prev => prev.map(l => l.title.startsWith(`Cycle ${cycleNumber}: Evaluating`) ? { ...l, content: evaluation } : l));
       
-      setImprovementSteps(prev => [...prev, 'Finalizing 10x enhanced prompt!']);
-      setCurrentPrompt(improvedPrompt);
-      setPromptHistory(prev => [improvedPrompt, ...prev]);
+      setImprovementLog(prev => [...prev, { type: 'refinement', title: `Cycle ${cycleNumber}: Refining Prompt...`, content: '' }]);
+      const { improvedPrompt, fullResponse } = await runRefinement(activePrompt.content, evaluation);
+      setImprovementLog(prev => prev.map(l => l.title.startsWith(`Cycle ${cycleNumber}: Refining`) ? { ...l, content: fullResponse } : l));
 
-      // Reset chat for the new prompt version
-      setChatHistory([]);
+      const newId = promptHistory.length + 1;
+      const version: PromptVersion = { id: newId, content: improvedPrompt, type: '10x' };
+      setPromptHistory(prev => [version, ...prev]);
+      setActivePromptId(newId);
 
     } catch (e) {
-      setError('Failed to improve the prompt. Please try again.');
+      setError('The improvement cycle failed. Please try again.');
       console.error(e);
     } finally {
       setIsLoading(false);
-      setAppState(AppState.REFINING);
     }
-  }, [currentPrompt]);
+  }, [getActivePrompt, promptHistory.length, improvementLog]);
 
-  const handleSelectHistory = (prompt: string) => {
-    setCurrentPrompt(prompt);
+  const handleFinishImprovement = () => {
+    setAppState(AppState.REFINING);
+    setChatHistory([]); // Reset chat for the new prompt
+  };
+
+  const handleSelectHistory = (id: number) => {
+    setActivePromptId(id);
     setChatHistory([]); // Reset chat when loading from history
+    if (appState === AppState.IMPROVING) {
+        setAppState(AppState.REFINING);
+    }
   };
   
   const handleReset = () => {
     setAppState(AppState.INITIAL);
-    setInitialPrompt('');
-    setCurrentPrompt('');
     setPromptHistory([]);
+    setActivePromptId(null);
     setChatHistory([]);
+    setImprovementLog([]);
     setError(null);
     setIsLoading(false);
+    setIsStreaming(false);
+  };
+  
+  const renderContent = () => {
+    switch(appState) {
+      case AppState.INITIAL:
+        return <WelcomeView onSubmit={handleInitialSubmit} isLoading={isLoading} />;
+      case AppState.REFINING:
+        const activePrompt = getActivePrompt();
+        if (!activePrompt) return <div className="text-center text-red-400">Error: No active prompt found.</div>;
+        return (
+          <WorkspaceView 
+            activePrompt={activePrompt}
+            chatHistory={chatHistory}
+            onChatSubmit={handleChatSubmit}
+            onStartImprovement={handleStartImprovement}
+            isStreaming={isStreaming}
+          />
+        );
+      case AppState.IMPROVING:
+         if (!getActivePrompt()) return <div className="text-center text-red-400">Error: No active prompt found.</div>;
+         return (
+            <ImprovementCycleView 
+                log={improvementLog}
+                onRunAgain={handleRunImprovementCycle}
+                onFinish={handleFinishImprovement}
+                isLoading={isLoading}
+            />
+         );
+    }
   }
 
   return (
     <div className="flex h-screen font-sans bg-gray-900 text-gray-200">
-      <div className="flex-1 flex flex-col p-4 md:p-8 overflow-y-auto">
-        <header className="flex justify-between items-center mb-6">
-          <div className="flex items-center gap-3">
-            <LogoIcon className="h-8 w-8 text-indigo-400" />
-            <h1 className="text-2xl font-bold text-gray-100">Make Any Prompt 10x Better</h1>
-          </div>
-          {appState !== AppState.INITIAL && (
-            <button onClick={handleReset} className="px-4 py-2 text-sm font-medium text-gray-300 bg-gray-700 rounded-md hover:bg-gray-600 transition-colors">
-              Start New
-            </button>
-          )}
-        </header>
-        
-        <main className="flex-1 flex flex-col">
-          {error && <div className="bg-red-900/50 border border-red-700 text-red-200 px-4 py-3 rounded-md mb-4" role="alert">{error}</div>}
-
-          {isLoading && appState === AppState.IMPROVING_10X && <LoadingOverlay steps={improvementSteps} />}
-          
-          {appState === AppState.INITIAL && <PromptInput onSubmit={handleInitialSubmit} isLoading={isLoading} />}
-
-          {appState === AppState.REFINING && currentPrompt && (
-            <MainInterface
-              currentPrompt={currentPrompt}
-              chatHistory={chatHistory}
-              onChatSubmit={handleChatSubmit}
-              onImprove={handleImprovementCycle}
-              isLoading={isLoading}
-            />
-          )}
-        </main>
-      </div>
-
-      <HistoryPanel
+       <HistoryPanel
         history={promptHistory}
         onSelect={handleSelectHistory}
-        currentPrompt={currentPrompt}
+        activePromptId={activePromptId}
+        onReset={handleReset}
       />
+      <main className="flex-1 flex flex-col p-4 md:p-6 lg:p-8 overflow-y-auto relative">
+         <header className="flex justify-between items-center mb-6 flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <LogoIcon className="h-8 w-8 text-indigo-400" />
+            <h1 className="text-2xl font-bold text-gray-100">Prompt Optimizer Pro</h1>
+          </div>
+        </header>
+        {error && <div className="bg-red-900/50 border border-red-700 text-red-200 px-4 py-3 rounded-md mb-4 flex-shrink-0" role="alert">{error}</div>}
+        <div className="flex-1 flex flex-col min-h-0">
+            {renderContent()}
+        </div>
+      </main>
     </div>
   );
 };
