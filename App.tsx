@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback } from 'react';
 import { AppState, PromptVersion, ChatMessage, ImprovementLog } from './types';
 import { initialEnhance, refineInChat, runEvaluation, runRefinement } from './services/geminiService';
@@ -6,7 +5,7 @@ import HistoryPanel from './components/HistoryPanel';
 import WelcomeView from './components/WelcomeView';
 import WorkspaceView from './components/WorkspaceView';
 import ImprovementCycleView from './components/ImprovementCycleView';
-import { LogoIcon } from './components/icons';
+import { LogoIcon, HistoryIcon } from './components/icons';
 
 const App: React.FC = () => {
   const [appState, setAppState] = useState<AppState>(AppState.INITIAL);
@@ -18,6 +17,7 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isStreaming, setIsStreaming] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [isHistoryPanelOpen, setIsHistoryPanelOpen] = useState(false);
   
   const getActivePrompt = () => promptHistory.find(p => p.id === activePromptId);
 
@@ -162,21 +162,25 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="flex h-screen font-sans bg-gray-900 text-gray-200">
+    <div className="flex h-screen font-sans text-slate-300">
        <HistoryPanel
         history={promptHistory}
         onSelect={handleSelectHistory}
         activePromptId={activePromptId}
         onReset={handleReset}
+        isOpen={isHistoryPanelOpen}
       />
       <main className="flex-1 flex flex-col p-4 md:p-6 lg:p-8 overflow-y-auto relative">
          <header className="flex justify-between items-center mb-6 flex-shrink-0">
           <div className="flex items-center gap-3">
+            <button onClick={() => setIsHistoryPanelOpen(!isHistoryPanelOpen)} className="p-2 rounded-md hover:bg-slate-700 transition-colors" title="Toggle History Panel">
+                <HistoryIcon className="h-6 w-6 text-slate-400" />
+            </button>
             <LogoIcon className="h-8 w-8 text-indigo-400" />
-            <h1 className="text-2xl font-bold text-gray-100">Prompt Optimizer Pro</h1>
+            <h1 className="text-2xl font-bold text-slate-100">Prompt Optimizer Pro</h1>
           </div>
         </header>
-        {error && <div className="bg-red-900/50 border border-red-700 text-red-200 px-4 py-3 rounded-md mb-4 flex-shrink-0" role="alert">{error}</div>}
+        {error && <div className="bg-red-900/50 border border-red-500/50 text-red-300 px-4 py-3 rounded-md mb-4 flex-shrink-0" role="alert">{error}</div>}
         <div className="flex-1 flex flex-col min-h-0">
             {renderContent()}
         </div>
