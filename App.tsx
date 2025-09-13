@@ -138,7 +138,7 @@ const App: React.FC = () => {
         return <WelcomeView onSubmit={handleInitialSubmit} isLoading={isLoading} />;
       case AppState.REFINING:
         const activePrompt = getActivePrompt();
-        if (!activePrompt) return <div className="text-center text-red-400">Error: No active prompt found.</div>;
+        if (!activePrompt) return <div className="text-center text-red-500">Error: No active prompt found.</div>;
         return (
           <WorkspaceView 
             activePrompt={activePrompt}
@@ -149,7 +149,7 @@ const App: React.FC = () => {
           />
         );
       case AppState.IMPROVING:
-         if (!getActivePrompt()) return <div className="text-center text-red-400">Error: No active prompt found.</div>;
+         if (!getActivePrompt()) return <div className="text-center text-red-500">Error: No active prompt found.</div>;
          return (
             <ImprovementCycleView 
                 log={improvementLog}
@@ -162,7 +162,7 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="flex h-screen font-sans text-slate-300">
+    <div className="flex h-screen font-sans text-slate-800">
        <HistoryPanel
         history={promptHistory}
         onSelect={handleSelectHistory}
@@ -173,14 +173,14 @@ const App: React.FC = () => {
       <main className="flex-1 flex flex-col p-4 md:p-6 lg:p-8 overflow-y-auto relative">
          <header className="flex justify-between items-center mb-6 flex-shrink-0">
           <div className="flex items-center gap-3">
-            <button onClick={() => setIsHistoryPanelOpen(!isHistoryPanelOpen)} className="p-2 rounded-md hover:bg-slate-700 transition-colors" title="Toggle History Panel">
-                <HistoryIcon className="h-6 w-6 text-slate-400" />
+            <button onClick={() => setIsHistoryPanelOpen(!isHistoryPanelOpen)} className="p-2 rounded-md hover:bg-rose-100/80 transition-colors" title="Toggle History Panel">
+                <HistoryIcon className="h-6 w-6 text-slate-500" />
             </button>
-            <LogoIcon className="h-8 w-8 text-indigo-400" />
-            <h1 className="text-2xl font-bold text-slate-100">Prompt Optimizer Pro</h1>
+            <LogoIcon className="h-8 w-8 text-rose-500" />
+            <h1 className="text-2xl font-bold text-slate-900">Prompt Optimizer Pro</h1>
           </div>
         </header>
-        {error && <div className="bg-red-900/50 border border-red-500/50 text-red-300 px-4 py-3 rounded-md mb-4 flex-shrink-0" role="alert">{error}</div>}
+        {error && <div className="bg-red-100 border border-red-300 text-red-700 px-4 py-3 rounded-md mb-4 flex-shrink-0" role="alert">{error}</div>}
         <div className="flex-1 flex flex-col min-h-0">
             {renderContent()}
         </div>
