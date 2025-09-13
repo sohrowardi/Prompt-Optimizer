@@ -3,7 +3,7 @@ import { ImprovementLog } from '../types';
 import { CheckIcon, FinishIcon, RocketIcon } from './icons';
 
 // A component to render text with a typewriter effect, mimicking a rapid terminal update.
-const Typewriter: React.FC<{ text: string }> = ({ text }) => {
+const Typewriter: React.FC<{ text: string; scrollContainerRef: React.RefObject<HTMLDivElement> }> = ({ text, scrollContainerRef }) => {
     const [displayedText, setDisplayedText] = useState('');
     const textRef = useRef(text);
 
@@ -17,18 +17,22 @@ const Typewriter: React.FC<{ text: string }> = ({ text }) => {
             // Animate from the current displayed text to the target text in the ref
             if (displayedText.length < textRef.current.length) {
                 const nextLength = Math.min(
-                    displayedText.length + 5, // Render 5 characters per frame for a rapid feel
+                    displayedText.length + 25, // Render 25 characters per frame for a much faster feel
                     textRef.current.length
                 );
                 setDisplayedText(textRef.current.substring(0, nextLength));
-            } else {
-                // Once caught up, we can clear the interval until the next text update.
-                // However, letting it run is simpler and handles continuous streams well.
             }
         }, 16); // ~60 FPS
 
         return () => clearInterval(interval);
     }, [displayedText]); // This dependency makes the effect act like a render loop
+
+    // Auto-scroll the container whenever the displayed text is updated
+    useEffect(() => {
+        if (scrollContainerRef.current) {
+            scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+        }
+    }, [displayedText, scrollContainerRef]);
 
     // Return a non-breaking space if empty to maintain container height
     return <code>{displayedText || '\u00A0'}</code>;
@@ -42,23 +46,27 @@ const getCycleNumberFromTitle = (title: string): number | null => {
 };
 
 // Sub-component for a single log entry (Evaluation or Refinement)
-const LogEntry: React.FC<{ entry: ImprovementLog; isStreaming: boolean; }> = ({ entry, isStreaming }) => (
-    <div className="bg-rose-50/50 p-4 rounded-lg border border-rose-100 flex-1 basis-1/2">
-        <h4 className="flex items-center gap-3 font-semibold text-lg text-slate-800 mb-2">
-            {isStreaming ? (
-                <div className="w-5 h-5 border-2 border-t-rose-500 border-rose-100 rounded-full animate-spin flex-shrink-0 ml-0.5"></div>
-            ) : (
-                <CheckIcon className="h-6 w-6 text-green-500 flex-shrink-0" />
-            )}
-            {entry.title.substring(entry.title.indexOf(': ') + 2)}
-        </h4>
-        <div className="mt-2 ml-9 max-h-80 overflow-y-auto bg-white/50 p-3 rounded-md border border-rose-100 scrollbar-thin">
-            <pre className="whitespace-pre-wrap break-words font-mono text-slate-600 text-xs">
-                <Typewriter text={entry.content} />
-            </pre>
+const LogEntry: React.FC<{ entry: ImprovementLog; isStreaming: boolean; }> = ({ entry, isStreaming }) => {
+    const scrollRef = useRef<HTMLDivElement>(null);
+
+    return (
+        <div className="bg-rose-50/50 p-4 rounded-lg border border-rose-100 flex-1 basis-1/2">
+            <h4 className="flex items-center gap-3 font-semibold text-lg text-slate-800 mb-2">
+                {isStreaming ? (
+                    <div className="w-5 h-5 border-2 border-t-rose-500 border-rose-100 rounded-full animate-spin flex-shrink-0 ml-0.5"></div>
+                ) : (
+                    <CheckIcon className="h-6 w-6 text-green-500 flex-shrink-0" />
+                )}
+                {entry.title.substring(entry.title.indexOf(': ') + 2)}
+            </h4>
+            <div ref={scrollRef} className="mt-2 ml-9 max-h-80 overflow-y-auto bg-white/50 p-3 rounded-md border border-rose-100 scrollbar-thin">
+                <pre className="whitespace-pre-wrap break-words font-mono text-slate-600 text-xs">
+                    <Typewriter text={entry.content} scrollContainerRef={scrollRef} />
+                </pre>
+            </div>
         </div>
-    </div>
-);
+    );
+};
 
 // Sub-component for a placeholder log entry
 const LogPlaceholder: React.FC<{ title: string; message: string; }> = ({ title, message }) => (
