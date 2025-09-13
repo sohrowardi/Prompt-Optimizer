@@ -1,11 +1,24 @@
+
 import React, { useState, useCallback, useEffect } from 'react';
-import { AppState, PromptVersion, ChatMessage, ImprovementLog } from './types';
+import { AppState, PromptVersion, ChatMessage, ImprovementLog, CritiqueAndQuestions } from './types';
 import { initialEnhance, refineInChatStream, runEvaluationStream, runRefinementStream, generateCritiqueAndQuestions } from './services/geminiService';
 import HistoryPanel from './components/HistoryPanel';
 import WelcomeView from './components/WelcomeView';
 import WorkspaceView from './components/WorkspaceView';
 import ImprovementCycleView from './components/ImprovementCycleView';
 import { LogoIcon, HistoryIcon } from './components/icons';
+
+const formatStructuredResponseToMarkdown = (data: CritiqueAndQuestions): string => {
+    let md = `**Critique:**\n${data.critique}\n\n`;
+    if (data.questions && data.questions.length > 0) {
+        md += `**Questions to Improve:**\n`;
+        data.questions.forEach((q, i) => {
+            md += `${i + 1}. ${q}\n`;
+        });
+    }
+    return md.trim();
+};
+
 
 const App: React.FC = () => {
   const [appState, setAppState] = useState<AppState>(AppState.INITIAL);
@@ -92,7 +105,7 @@ const App: React.FC = () => {
       
       setPromptHistory([enhanced, originalPrompt]);
       setActivePromptId(2);
-      setChatHistory([{ role: 'model', content: initialBotMessage }]);
+      setChatHistory([initialBotMessage]);
       setAppState(AppState.REFINING);
     } catch (e) {
       setError((e as Error).message);
@@ -106,7 +119,7 @@ const App: React.FC = () => {
   const handleChatSubmit = useCallback(async (message: string) => {
     const activePrompt = getActivePrompt();
     if (!activePrompt) return;
-    
+
     setIsStreaming(true);
     setError(null);
     const currentChatHistory: ChatMessage[] = [...chatHistory, { role: 'user', content: message }];
@@ -114,36 +127,51 @@ const App: React.FC = () => {
 
     try {
       const { newPrompt } = await refineInChatStream(
-        activePrompt.content, 
+        activePrompt.content,
         currentChatHistory,
         (chunk) => {
           setChatHistory(prev => {
             const newHistory = [...prev];
             const lastMessage = newHistory[newHistory.length - 1];
             if (lastMessage && lastMessage.role === 'model') {
-                lastMessage.content += chunk;
+              lastMessage.content += chunk;
             }
             return newHistory;
           });
         }
       );
-      
+
+      setIsStreaming(false); // Streaming part is done.
+
       if (newPrompt) {
+        // A new prompt was generated. Start a new refinement cycle for it.
+        setIsLoading(true); // Show loading indicator while we fetch the critique.
+
         const newId = promptHistory.length > 0 ? Math.max(...promptHistory.map(p => p.id)) + 1 : 1;
         const version: PromptVersion = { id: newId, content: newPrompt, type: 'Refined' };
         setPromptHistory(prev => [version, ...prev]);
         setActivePromptId(newId);
+
+        // Generate new critique and questions for the new prompt, replacing the current chat.
+        const { structuredResponse } = await generateCritiqueAndQuestions(newPrompt);
+        const botMessage: ChatMessage = {
+            role: 'model',
+            content: formatStructuredResponseToMarkdown(structuredResponse),
+            structuredContent: structuredResponse,
+        };
+        setChatHistory([botMessage]);
+
+        setIsLoading(false); // Done loading new cycle.
       }
     } catch (e) {
       setError((e as Error).message);
       console.error(e);
       // Remove placeholder on error
       setChatHistory(prev => prev.slice(0, -1));
-    } finally {
-      setIsStreaming(false);
+      setIsStreaming(false); // Ensure streaming stops on error.
     }
   }, [chatHistory, getActivePrompt, promptHistory]);
-  
+
   const handleStartImprovement = () => {
     setAppState(AppState.IMPROVING);
     setImprovementLog([]);
@@ -204,8 +232,13 @@ const App: React.FC = () => {
 
     try {
       // Generate a new critique for the newly created 10x prompt
-      const initialBotMessage = await generateCritiqueAndQuestions(latestPrompt.content);
-      setChatHistory([{ role: 'model', content: initialBotMessage }]);
+      const { structuredResponse } = await generateCritiqueAndQuestions(latestPrompt.content);
+      const botMessage: ChatMessage = {
+          role: 'model',
+          content: formatStructuredResponseToMarkdown(structuredResponse),
+          structuredContent: structuredResponse,
+      };
+      setChatHistory([botMessage]);
     } catch (e) {
       setError((e as Error).message);
       console.error(e);
@@ -215,13 +248,34 @@ const App: React.FC = () => {
     }
   }, [getActivePrompt]);
 
-  const handleSelectHistory = (id: number) => {
+  const handleSelectHistory = useCallback(async (id: number) => {
+    const selectedPrompt = promptHistory.find(p => p.id === id);
+    if (!selectedPrompt) return;
+
     setActivePromptId(id);
-    setChatHistory([]); // Reset chat when loading from history
     if (appState === AppState.IMPROVING) {
-        setAppState(AppState.REFINING);
+      setAppState(AppState.REFINING);
     }
-  };
+
+    // Generate a fresh critique for the selected historical prompt.
+    setIsLoading(true);
+    setError(null);
+    setChatHistory([]); // Clear chat to show loading state
+    try {
+      const { structuredResponse } = await generateCritiqueAndQuestions(selectedPrompt.content);
+      const botMessage: ChatMessage = {
+          role: 'model',
+          content: formatStructuredResponseToMarkdown(structuredResponse),
+          structuredContent: structuredResponse,
+      };
+      setChatHistory([botMessage]);
+    } catch (e) {
+      setError((e as Error).message);
+      console.error(e);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [promptHistory, appState]);
   
   const handleReset = () => {
     setAppState(AppState.INITIAL);
@@ -246,7 +300,7 @@ const App: React.FC = () => {
         if (!activePrompt) {
             // This can happen if history is cleared or corrupted. Reset to a safe state.
              if (!isLoading) { handleReset(); }
-             return <div className="text-center text-slate-500">Loading session...</div>;
+             return <div className="text-center text-gray-400">Loading session...</div>;
         }
         return (
           <WorkspaceView 
@@ -272,7 +326,7 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="flex h-screen font-sans text-slate-800">
+    <div className="flex h-screen font-sans text-gray-200">
        <HistoryPanel
         history={promptHistory}
         onSelect={handleSelectHistory}
@@ -283,14 +337,14 @@ const App: React.FC = () => {
       <main className="flex-1 flex flex-col p-4 md:p-6 lg:p-8 overflow-y-auto relative">
          <header className="flex justify-between items-center mb-6 flex-shrink-0">
           <div className="flex items-center gap-3">
-            <button onClick={() => setIsHistoryPanelOpen(!isHistoryPanelOpen)} className="p-2 rounded-md hover:bg-rose-100/80 transition-colors" title={isHistoryPanelOpen ? "Close History Panel" : "Open History Panel"}>
-                <HistoryIcon className="h-6 w-6 text-slate-500" />
+            <button onClick={() => setIsHistoryPanelOpen(!isHistoryPanelOpen)} className="p-2 rounded-md hover:bg-gray-800/80 transition-colors" title={isHistoryPanelOpen ? "Close History Panel" : "Open History Panel"}>
+                <HistoryIcon className="h-6 w-6 text-gray-500" />
             </button>
-            <LogoIcon className="h-8 w-8 text-rose-500" />
-            <h1 className="text-2xl font-bold text-slate-900">Prompt Optimizer Pro</h1>
+            <LogoIcon className="h-8 w-8 text-[#ff91af]" />
+            <h1 className="text-2xl font-bold text-gray-100">Prompt Optimizer Pro</h1>
           </div>
         </header>
-        {error && <div className="bg-red-100 border border-red-300 text-red-700 px-4 py-3 rounded-md mb-4 flex-shrink-0" role="alert">{error}</div>}
+        {error && <div className="bg-red-900/50 border border-red-700 text-red-300 px-4 py-3 rounded-md mb-4 flex-shrink-0" role="alert">{error}</div>}
         <div className="flex-1 flex flex-col min-h-0">
             {renderContent()}
         </div>

@@ -28,13 +28,13 @@ const PromptInput: React.FC<PromptInputProps> = ({ onSubmit, isLoading }) => {
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             placeholder="e.g., 'write a story about a robot who discovers music'"
-            className="w-full h-40 p-4 bg-gray-800 border border-gray-700 rounded-lg text-gray-200 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-shadow resize-none"
+            className="w-full h-40 p-4 bg-gray-800 border border-gray-700 rounded-lg text-gray-200 placeholder-gray-500 focus:ring-2 focus:ring-[#ff91af] focus:border-[#ff91af] transition-shadow resize-none"
             disabled={isLoading}
           />
           <button
             type="submit"
             disabled={isLoading || !prompt.trim()}
-            className="mt-6 w-full flex items-center justify-center gap-2 px-6 py-4 text-lg font-semibold text-white bg-indigo-600 rounded-lg shadow-lg hover:bg-indigo-700 disabled:bg-indigo-900/50 disabled:cursor-not-allowed disabled:text-gray-400 transition-all duration-300 transform hover:scale-105"
+            className="mt-6 w-full flex items-center justify-center gap-2 px-6 py-4 text-lg font-semibold text-white bg-[#ff91af] rounded-lg shadow-lg hover:bg-[#f76a94] disabled:bg-gray-700 disabled:cursor-not-allowed disabled:text-gray-500 transition-all duration-300 transform hover:scale-105"
           >
             {isLoading ? (
               'Generating...'

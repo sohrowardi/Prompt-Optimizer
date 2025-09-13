@@ -1,6 +1,7 @@
-import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
-import { PROMPT_1, PROMPT_2, PROMPT_3, CHAT_SYSTEM_INSTRUCTION, PROMPT_4 } from '../constants';
-import { ChatMessage } from '../types';
+
+import { GoogleGenAI, GenerateContentResponse, Type } from "@google/genai";
+import { PROMPT_1_LEGACY, PROMPT_2, PROMPT_3, CHAT_SYSTEM_INSTRUCTION, PROMPT_4_LEGACY, PROMPT_1_SYSTEM_INSTRUCTION, PROMPT_4_SYSTEM_INSTRUCTION } from '../constants';
+import { ChatMessage, CritiqueAndQuestions, InitialEnhancement } from '../types';
 
 if (!process.env.API_KEY) {
     throw new Error("API_KEY environment variable is not set.");
@@ -29,8 +30,7 @@ const handleGeminiError = (error: unknown, context: string): Error => {
     return new Error(message);
 };
 
-
-// This is a non-streaming helper for initial enhancement and chat, which don't have a streaming UI.
+// Non-streaming helper for legacy prompts
 const generate = async (prompt: string): Promise<string> => {
     try {
         const response: GenerateContentResponse = await ai.models.generateContent({
@@ -43,13 +43,6 @@ const generate = async (prompt: string): Promise<string> => {
     }
 };
 
-/**
- * Extracts a specific section from a larger text block based on a markdown heading.
- * @param text The full text to search within.
- * @param title The heading of the section to extract (e.g., "Prompt", "Critique").
- * @param isCodeBlock Whether the content is expected to be in a markdown code block.
- * @returns The trimmed content of the section, or null if not found.
- */
 const extractSection = (text: string, title: string, isCodeBlock: boolean): string | null => {
     const pattern = isCodeBlock
         ? `\\*\\*${title}:\\*\\*\\s*\\\`\\\`\\\`([\\s\\S]+?)\\\`\\\`\\\``
@@ -61,37 +54,84 @@ const extractSection = (text: string, title: string, isCodeBlock: boolean): stri
     return match && match[1] ? match[1].trim() : null;
 };
 
+const questionsSchema = {
+    type: Type.ARRAY,
+    description: "A list of up to 4 clarifying questions to help the user refine the prompt.",
+    items: {
+        type: Type.STRING,
+        description: "A single, clear, and straightforward question.",
+    },
+    maxItems: 4
+};
 
-export const initialEnhance = async (userPrompt: string): Promise<{ enhancedPrompt: string; initialBotMessage: string; }> => {
-    const prompt = PROMPT_1.replace('{{USER_PROMPT}}', userPrompt);
-    const fullResponse = await generate(prompt);
 
-    const enhancedPrompt = extractSection(fullResponse, 'Prompt', true);
-    const critique = extractSection(fullResponse, 'Critique', false);
-    const questions = extractSection(fullResponse, 'Questions to Improve', false);
+export const initialEnhance = async (userPrompt: string): Promise<{ enhancedPrompt: string; initialBotMessage: ChatMessage; }> => {
+    const contents = `User's basic idea:\n\n\`\`\`\n${userPrompt}\n\`\`\``;
+    const schema = {
+        type: Type.OBJECT,
+        properties: {
+            enhancedPrompt: {
+                type: Type.STRING,
+                description: "The generated, professional prompt based on the user's idea."
+            },
+            critique: {
+                type: Type.STRING,
+                description: "An analysis of the generated prompt's effectiveness, strengths, and suggestions for improvement."
+            },
+            questions: questionsSchema,
+        },
+        required: ["enhancedPrompt", "critique", "questions"]
+    };
 
-    if (!enhancedPrompt) {
-        console.error("Could not parse enhanced prompt from Gemini response:", fullResponse);
-        return {
-            enhancedPrompt: "Sorry, I had trouble generating a prompt. Your original prompt has been saved.",
-            initialBotMessage: `I failed to structure my response correctly, so I couldn't extract the enhanced prompt. Here is my raw output, please try refining it in the chat:\n\n${fullResponse}`
+    try {
+        const response = await ai.models.generateContent({
+            model,
+            contents,
+            config: {
+                systemInstruction: PROMPT_1_SYSTEM_INSTRUCTION,
+                responseMimeType: "application/json",
+                responseSchema: schema,
+            },
+        });
+        
+        const rawResponse = response.text.trim();
+        const structuredData: InitialEnhancement = JSON.parse(rawResponse);
+        
+        const botMessageContent = `Here is the first version of your prompt. You can refine it with me below.\n\n**Critique:**\n${structuredData.critique}`;
+
+        const initialBotMessage: ChatMessage = {
+            role: 'model',
+            content: botMessageContent,
+            structuredContent: {
+                critique: structuredData.critique,
+                questions: structuredData.questions,
+            },
         };
-    }
-    
-    let initialBotMessage = '';
-    if (critique) {
-        initialBotMessage += `**Critique:**\n${critique}\n\n`;
-    }
-    if (questions) {
-        initialBotMessage += `**Questions to Improve:**\n${questions}`;
-    }
+        
+        return { enhancedPrompt: structuredData.enhancedPrompt, initialBotMessage };
 
-    // Fallback if both critique and questions are missing
-    if (!critique && !questions) {
-        initialBotMessage = "My apologies, I generated an enhanced prompt but failed to provide the usual critique and questions. We can refine it together here in the chat. What would you like to improve?";
-    }
+    } catch (error) {
+        console.error("JSON generation for initial enhance failed, falling back.", error);
+        
+        const fallbackPrompt = PROMPT_1_LEGACY.replace('{{USER_PROMPT}}', userPrompt);
+        const fullResponse = await generate(fallbackPrompt);
 
-    return { enhancedPrompt, initialBotMessage: initialBotMessage.trim() };
+        const enhancedPrompt = extractSection(fullResponse, 'Prompt', true) || `Your original prompt has been saved as I had trouble enhancing it: ${userPrompt}`;
+        const critique = extractSection(fullResponse, 'Critique', false) || "I had trouble generating a critique.";
+        const questionsText = extractSection(fullResponse, 'Questions to Improve', false) || "How would you like to improve this prompt?";
+
+        const questions: string[] = questionsText.split('\n').map(q => q.replace(/^\d+\.\s*/, '').trim()).filter(Boolean);
+        
+        const content = `I had some trouble with my usual structured analysis. Here is the enhanced prompt and my thoughts:\n\n**Critique:**\n${critique}`;
+
+        const initialBotMessage: ChatMessage = {
+            role: 'model',
+            content: content,
+            structuredContent: { critique, questions }
+        };
+
+        return { enhancedPrompt, initialBotMessage };
+    }
 };
 
 export const refineInChatStream = async (currentPrompt: string, chatHistory: ChatMessage[], onChunk: (chunk: string) => void): Promise<{ newPrompt: string | null }> => {
@@ -130,18 +170,51 @@ export const refineInChatStream = async (currentPrompt: string, chatHistory: Cha
     }
 };
 
+export const generateCritiqueAndQuestions = async (promptToAnalyze: string): Promise<{ structuredResponse: CritiqueAndQuestions; rawResponse: string }> => {
+    const contents = `Analyze the following prompt:\n\n\`\`\`\n${promptToAnalyze}\n\`\`\``;
+    const schema = {
+        type: Type.OBJECT,
+        properties: {
+            critique: {
+                type: Type.STRING,
+                description: "A brief critique of the prompt's strengths and weaknesses."
+            },
+            questions: questionsSchema,
+        },
+        required: ["critique", "questions"]
+    };
 
-export const generateCritiqueAndQuestions = async (promptToAnalyze: string): Promise<string> => {
-    const prompt = PROMPT_4.replace('{{PROMPT_TO_ANALYZE}}', promptToAnalyze);
-    const fullResponse = await generate(prompt);
+    try {
+        const response = await ai.models.generateContent({
+            model,
+            contents,
+            config: {
+                systemInstruction: PROMPT_4_SYSTEM_INSTRUCTION,
+                responseMimeType: "application/json",
+                responseSchema: schema,
+            },
+        });
 
-    if (!fullResponse.includes('**Critique:**') || !fullResponse.includes('**Questions to Improve:**')) {
-        let helpfulMessage = "My apologies, I had trouble analyzing the new prompt. Here's what I came up with:\n\n" + fullResponse;
-        helpfulMessage += "\n\nHow would you like to refine this new 10x prompt?";
-        return helpfulMessage;
+        const rawResponse = response.text.trim();
+        const structuredResponse = JSON.parse(rawResponse);
+        return { structuredResponse, rawResponse };
+
+    } catch (error) {
+        console.error("JSON generation for critique failed, falling back to text-based generation.", error);
+        
+        const fallbackPrompt = PROMPT_4_LEGACY.replace('{{PROMPT_TO_ANALYZE}}', promptToAnalyze);
+        const fallbackRawResponse = await generate(fallbackPrompt);
+
+        const critique = extractSection(fallbackRawResponse, 'Critique', false) || "I had trouble analyzing the prompt. How can we improve it?";
+        const questionsText = extractSection(fallbackRawResponse, 'Questions to Improve', false) || "What is the main goal for this prompt?";
+        
+        const questions: string[] = questionsText.split('\n').map(q => q.replace(/^\d+\.\s*/, '').trim()).filter(Boolean);
+
+        return {
+            structuredResponse: { critique, questions },
+            rawResponse: fallbackRawResponse,
+        };
     }
-
-    return fullResponse;
 };
 
 // --- Streaming Functions for 10x Improvement Hub ---
@@ -201,7 +274,7 @@ export const runRefinementStream = async (promptToImprove: string, critique: str
 };
 
 export const fetchTrendingPrompts = async (): Promise<string[]> => {
-    const prompt = `You are an AI assistant that finds trending content. Your task is to find 5 of the most popular and trending AI art or text generation prompts that people are currently using online. Use your search capabilities to find up-to-date examples. The prompts should be diverse and interesting. IMPORTANT: Return ONLY a valid JSON array of strings. Do not include any other text, explanation, or markdown. The output must be parsable by JSON.parse(). Example format: ["A photorealistic portrait of a futuristic cyborg ninja", "Create a short story in the style of Edgar Allan Poe about a haunted lighthouse"]`;
+    const prompt = `You are an AI assistant that finds trending content. Your task is to find 5 of the most popular and trending AI art or text generation prompts that people are currently using online. Use your search capabilities to find up-to-date examples. The prompts must be diverse, interesting, SHORT, and fit on a single line (under 10 words). IMPORTANT: Return ONLY a valid JSON array of strings. Do not include any other text, explanation, or markdown. The output must be parsable by JSON.parse(). Example format: ["Photorealistic cyborg ninja", "Haunted lighthouse story, Poe style", "Logo for a futuristic tech company"]`;
     
     try {
         const response: GenerateContentResponse = await ai.models.generateContent({

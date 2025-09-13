@@ -1,4 +1,5 @@
 
+
 import React from 'react';
 import { ChatMessage } from '../types';
 import ChatInterface from './ChatInterface';
@@ -29,7 +30,7 @@ const MainInterface: React.FC<MainInterfaceProps> = ({
       <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-6 mb-6 relative">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-semibold text-gray-200">Current Prompt</h3>
-          <button onClick={handleCopy} className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-md transition-colors">
+          <button onClick={handleCopy} className="p-2 text-gray-400 hover:text-white hover:bg-gray-600 rounded-md transition-colors">
             <CopyIcon className="h-5 w-5" />
           </button>
         </div>
@@ -53,7 +54,7 @@ const MainInterface: React.FC<MainInterfaceProps> = ({
            <button
               onClick={onImprove}
               disabled={isLoading}
-              className="w-full flex items-center justify-center gap-2 px-6 py-3 text-md font-semibold text-white bg-green-600 rounded-lg shadow-lg hover:bg-green-700 disabled:bg-green-900/50 disabled:cursor-not-allowed disabled:text-gray-400 transition-all duration-300"
+              className="w-full flex items-center justify-center gap-2 px-6 py-3 text-md font-semibold text-white bg-[#ff91af] rounded-lg shadow-lg hover:bg-[#f76a94] disabled:bg-gray-700 disabled:cursor-not-allowed disabled:text-gray-500 transition-all duration-300"
             >
               <RocketIcon className="h-5 w-5" />
               Make it 10x Better

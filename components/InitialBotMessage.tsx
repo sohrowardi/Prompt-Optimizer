@@ -1,68 +1,28 @@
-import React, { useState, useMemo, useEffect } from 'react';
+
+import React, { useState } from 'react';
+import { CritiqueAndQuestions } from '../types';
 import { InfoIcon, BotIcon } from './icons';
 
-// A custom hook for the fast typewriter effect.
-const useFastTypewriter = (text: string) => {
-    const [displayedText, setDisplayedText] = useState('');
+interface InitialBotMessageProps {
+  structuredContent: CritiqueAndQuestions;
+}
 
-    useEffect(() => {
-        setDisplayedText('');
-        if (!text) return;
-
-        let index = 0;
-        const CHUNK_SIZE = 20; // Fast chunk size
-        let animationFrameId: number;
-
-        const animate = () => {
-            const nextIndex = Math.min(index + CHUNK_SIZE, text.length);
-            setDisplayedText(text.substring(0, nextIndex));
-            index = nextIndex;
-
-            if (index < text.length) {
-                animationFrameId = requestAnimationFrame(animate);
-            }
-        };
-        animationFrameId = requestAnimationFrame(animate);
-
-        return () => cancelAnimationFrame(animationFrameId);
-    }, [text]);
-
-    return displayedText;
-};
-
-const StreamingMessagePart: React.FC<{ content: string }> = ({ content }) => {
-    const displayedContent = useFastTypewriter(content);
-    return <p className="text-sm whitespace-pre-wrap">{displayedContent}</p>;
-};
-
-const InitialBotMessage: React.FC<{ content: string }> = ({ content }) => {
+const InitialBotMessage: React.FC<InitialBotMessageProps> = ({ structuredContent }) => {
   const [isDetailsVisible, setIsDetailsVisible] = useState(false);
+  const { critique, questions } = structuredContent;
 
-  const { details, questions } = useMemo(() => {
-    const parts = content.split('**Questions to Improve:**');
-    let detailsContent = (parts[0] || '').trim();
-    const questionsContent = parts[1] ? `**Questions to Improve:**${parts[1]}`.trim() : '';
-    
-    if (!detailsContent && questionsContent) {
-        detailsContent = `**Critique:**\n[My apologies, I did not provide a critique in my analysis. You can ask for one in the chat.]`;
-    } else if (!detailsContent && !questionsContent) {
-        detailsContent = `[My apologies, I was unable to generate an analysis for this prompt.]`;
-    }
-
-    return {
-      details: detailsContent,
-      questions: questionsContent,
-    };
-  }, [content]);
+  if (!critique && (!questions || questions.length === 0)) {
+    return null; // Don't render an empty message
+  }
 
   return (
     <div className="flex items-start gap-3">
-      <BotIcon className="h-8 w-8 flex-shrink-0 text-rose-500 bg-rose-100 p-1.5 rounded-full" />
-      <div className="max-w-xl p-3 rounded-xl shadow-sm bg-white text-slate-700 border border-rose-200/80 w-full">
-        <div className="mb-2">
+      <BotIcon className="h-8 w-8 flex-shrink-0 text-[#ff91af] bg-[#ff91af]/20 p-1.5 rounded-full" />
+      <div className="max-w-xl p-3 rounded-xl shadow-sm bg-gray-700 text-gray-200 border border-gray-600 w-full">
+        <div className="mb-3">
           <button
             onClick={() => setIsDetailsVisible(!isDetailsVisible)}
-            className="flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-800 transition-colors"
+            className="flex items-center gap-2 text-sm font-semibold text-gray-400 hover:text-gray-200 transition-colors"
             aria-expanded={isDetailsVisible}
             title="Toggle visibility of the prompt critique and analysis"
           >
@@ -70,14 +30,24 @@ const InitialBotMessage: React.FC<{ content: string }> = ({ content }) => {
             <span>{isDetailsVisible ? 'Hide' : 'Show'} Prompt Analysis</span>
           </button>
           {isDetailsVisible && (
-            <div className="mt-2 pl-1 border-l-2 border-rose-200">
-              <div className="text-sm whitespace-pre-wrap pl-3">
-                <StreamingMessagePart content={details} />
+            <div className="mt-2 pl-1 border-l-2 border-gray-600">
+              <div className="text-sm whitespace-pre-wrap pl-3 text-gray-300">
+                {critique}
               </div>
             </div>
           )}
         </div>
-        {questions && <StreamingMessagePart content={questions} />}
+        
+        {questions && questions.length > 0 && (
+          <div>
+            <p className="font-semibold text-sm text-gray-200 mb-2">Questions to improve this prompt:</p>
+            <ul className="list-decimal list-inside space-y-1 text-sm text-gray-300">
+              {questions.map((question, index) => (
+                <li key={index}>{question}</li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
     </div>
   );

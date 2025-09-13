@@ -20,7 +20,7 @@ const LoadingOverlay: React.FC<LoadingOverlayProps> = ({ steps }) => {
                 {step.content ? (
                   <CheckIcon className="h-6 w-6 text-green-400 flex-shrink-0" />
                 ) : (
-                  <div className="w-5 h-5 border-2 border-t-indigo-400 border-gray-600 rounded-full animate-spin flex-shrink-0 ml-0.5"></div>
+                  <div className="w-5 h-5 border-2 border-t-[#ff91af] border-gray-600 rounded-full animate-spin flex-shrink-0 ml-0.5"></div>
                 )}
                 <span className="font-semibold text-lg">{step.title}</span>
               </div>

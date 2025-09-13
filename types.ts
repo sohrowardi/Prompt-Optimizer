@@ -13,9 +13,15 @@ export interface PromptVersion {
   type: PromptType;
 }
 
+export interface CritiqueAndQuestions {
+  critique: string;
+  questions: string[];
+}
+
 export interface ChatMessage {
   role: 'user' | 'model';
-  content: string;
+  content: string; // This will hold a markdown-formatted version for display
+  structuredContent?: CritiqueAndQuestions; // This will hold the parsed data for the interactive UI
 }
 
 export interface ImprovementLog {
@@ -23,4 +29,10 @@ export interface ImprovementLog {
     type: 'evaluation' | 'refinement';
     title: string;
     content: string;
+}
+
+export interface InitialEnhancement {
+  enhancedPrompt: string;
+  critique: string;
+  questions: string[];
 }
