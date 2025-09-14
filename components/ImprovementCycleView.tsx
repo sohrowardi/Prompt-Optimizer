@@ -68,16 +68,17 @@ const ImprovementCycleView: React.FC<{ log: ImprovementLog[], onRunAgain: () => 
     // Group logs by cycle number
     // FIX: Explicitly type the accumulator for `reduce` to ensure `cycles` is correctly typed.
     // This resolves downstream type errors where `cycleEntries` was inferred as `unknown`.
-    const cycles = log.reduce((acc: Record<string, ImprovementLog[]>, entry) => {
+    const cycles = log.reduce<Record<string, ImprovementLog[]>>((acc, entry) => {
         const cycleNum = getCycleNumberFromTitle(entry.title);
         if (cycleNum !== null) {
-            if (!acc[cycleNum]) {
-                acc[cycleNum] = [];
+            const key = String(cycleNum);
+            if (!acc[key]) {
+                acc[key] = [];
             }
-            acc[cycleNum].push(entry);
+            acc[key].push(entry);
         }
         return acc;
-    }, {} as Record<string, ImprovementLog[]>);
+    }, {});
 
     return (
         <div className="flex-1 flex flex-col min-h-0 p-4 bg-gray-800/50 backdrop-blur-md border border-gray-700 rounded-xl">

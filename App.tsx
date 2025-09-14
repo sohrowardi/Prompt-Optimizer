@@ -6,7 +6,7 @@ import HistoryPanel from './components/HistoryPanel';
 import WelcomeView from './components/WelcomeView';
 import WorkspaceView from './components/WorkspaceView';
 import ImprovementCycleView from './components/ImprovementCycleView';
-import { LogoIcon, HistoryIcon } from './components/icons';
+import { LogoIcon, HistoryIcon, NewFileIcon } from './components/icons';
 
 const formatStructuredResponseToMarkdown = (data: CritiqueAndQuestions): string => {
     let md = `**Critique:**\n${data.critique}\n\n`;
@@ -331,7 +331,6 @@ const App: React.FC = () => {
         history={promptHistory}
         onSelect={handleSelectHistory}
         activePromptId={activePromptId}
-        onReset={handleReset}
         isOpen={isHistoryPanelOpen}
       />
       <main className="flex-1 flex flex-col p-4 md:p-6 lg:p-8 overflow-y-auto relative">
@@ -343,6 +342,14 @@ const App: React.FC = () => {
             <LogoIcon className="h-8 w-8 text-[#ff91af]" />
             <h1 className="text-2xl font-bold text-gray-100">Prompt Optimizer Pro</h1>
           </div>
+          <button
+            onClick={handleReset}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-300 bg-gray-800 rounded-md hover:bg-gray-700 transition-colors"
+            title="Start a new session and clear history"
+          >
+            <NewFileIcon className="h-5 w-5" />
+            New Session
+          </button>
         </header>
         {error && <div className="bg-red-900/50 border border-red-700 text-red-300 px-4 py-3 rounded-md mb-4 flex-shrink-0" role="alert">{error}</div>}
         <div className="flex-1 flex flex-col min-h-0">

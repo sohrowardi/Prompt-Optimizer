@@ -1,12 +1,11 @@
 import React from 'react';
 import { PromptVersion, PromptType } from '../types';
-import { CopyIcon, NewFileIcon } from './icons';
+import { CopyIcon } from './icons';
 
 interface HistoryPanelProps {
   history: PromptVersion[];
   onSelect: (id: number) => void;
   activePromptId: number | null;
-  onReset: () => void;
   isOpen: boolean;
 }
 
@@ -17,7 +16,7 @@ const typeColors: Record<PromptType, string> = {
   '10x': 'text-green-400 bg-green-900/50 border-green-800',
 };
 
-const HistoryPanel: React.FC<HistoryPanelProps> = ({ history, onSelect, activePromptId, onReset, isOpen }) => {
+const HistoryPanel: React.FC<HistoryPanelProps> = ({ history, onSelect, activePromptId, isOpen }) => {
   const handleCopy = (e: React.MouseEvent, content: string) => {
     e.stopPropagation();
     navigator.clipboard.writeText(content);
@@ -30,10 +29,6 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ history, onSelect, activePr
             <h2 className="text-lg font-semibold text-gray-200">Prompt History</h2>
             <p className="text-sm text-gray-400">Latest is at the top.</p>
         </div>
-        <button onClick={onReset} className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-300 bg-gray-700/50 rounded-md hover:bg-gray-700 transition-colors" title="Start a new session and clear history">
-            <NewFileIcon className="h-4 w-4" />
-            New
-        </button>
       </div>
       <div className="flex-1 overflow-y-auto scrollbar-thin">
         {history.length > 0 ? history.map((prompt, index) => {
