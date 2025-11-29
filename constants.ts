@@ -94,8 +94,14 @@ Your Output Structure for Each Iteration:
 This system interface uses a specific JSON Schema to render the output in the user interface. You MUST ignore the "Your Output Structure for Each Iteration" section of the persona text above if it conflicts with the following JSON requirement.
 
 Your entire response must be a valid JSON object matching the provided schema.
-1. **enhancedPrompt**: This is where you put your "Initial Understanding & Prompt Generation" result. Do NOT wrap this in markdown code blocks within the JSON string.
+
+1. **enhancedPrompt**: This is where you put your "Initial Understanding & Prompt Generation" result.
+   - **CRITICAL**: The content of this prompt must be **PLAIN TEXT ONLY**.
+   - Do **NOT** use Markdown formatting characters inside the prompt text (NO \`**bold**\`, NO \`*italics*\`, NO \`# Headers\`, NO \`[Section Tags]\`, NO \`###\`).
+   - Do **NOT** wrap this in markdown code blocks within the JSON string.
+   
 2. **critique**: This is where you put your "Critique & Strategic Analysis". Format this using Markdown (bolding key terms like **Strength:**, **Risk Profile:**, etc.) so it reads clearly in the UI.
+
 3. **questions**: This is where you put your "Refinement & Targeted Clarification" questions as an array of strings.
 `;
 
@@ -303,7 +309,9 @@ export const PROMPT_3 = `You are a **senior prompt engineer** participating in t
 Your response may optionally include a brief explanation of the changes made. This explanation must come BEFORE the final prompt.
 
 The final, revised prompt MUST be enclosed in a markdown code block using triple backticks (\`\`\`).
-**VERY IMPORTANT: ONLY the prompt text itself should be inside this code block. Do not include any other text, notes, headers, or explanations within the backticks.**
+**VERY IMPORTANT:**
+1. ONLY the prompt text itself should be inside this code block.
+2. The prompt text MUST be **PLAIN TEXT**. Do NOT use markdown formatting (no bolding, no headers, no section brackets like [Role]).
 
 **Correct Example:**
 I improved the clarity and added a specific word count.
@@ -311,7 +319,7 @@ I improved the clarity and added a specific word count.
 In 150–200 words, compare supervised and unsupervised machine learning models, providing at least one real-world application for each.
 \`\`\`
 
-**Incorrect Example:**
+**Incorrect Example (Do NOT do this):**
 \`\`\`
 **Revised Prompt:**
 In 150–200 words, compare supervised and unsupervised machine learning models, providing at least one real-world application for each.
@@ -345,6 +353,11 @@ VERY IMPORTANT: You MUST wrap the final, revised prompt in a markdown code block
 [The full revised prompt goes here]
 \`\`\`
 This is the only way the system can extract your revision. Do not forget the backticks.
+
+**FORMATTING RULES FOR THE PROMPT:**
+- The content inside the code block must be **PLAIN TEXT ONLY**.
+- Do NOT use markdown formatting inside the prompt (NO bolding \`**\`, NO headers \`#\`, NO brackets \`[]\`).
+
 If you are just having a conversation, do not use the code block. Only use it when you are outputting the final, revised version of the prompt for the user.
 `;
 
@@ -375,3 +388,4 @@ export const PROMPT_4_SYSTEM_INSTRUCTION = `You are an advanced AI specializing 
 2.  Generate up to 4 short, clear, and important questions to guide the user's refinement.
 3.  Your entire response must be a valid JSON object matching the provided schema.
 `;
+    

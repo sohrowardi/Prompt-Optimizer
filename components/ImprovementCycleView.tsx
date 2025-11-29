@@ -1,6 +1,4 @@
 
-
-
 import React, { useLayoutEffect, useRef } from 'react';
 import { ImprovementLog } from '../types';
 import { CheckIcon, FinishIcon, RocketIcon } from './icons';
@@ -66,9 +64,9 @@ const LogPlaceholder: React.FC<{ title: string; }> = ({ title }) => (
 
 const ImprovementCycleView: React.FC<{ log: ImprovementLog[], onRunAgain: () => void, onFinish: () => void, isLoading: boolean }> = ({ log, onRunAgain, onFinish, isLoading }) => {
     // Group logs by cycle number
-    // FIX: Explicitly type the accumulator for `reduce` to ensure `cycles` is correctly typed.
-    // This resolves downstream type errors where `cycleEntries` was inferred as `unknown`.
-    const cycles = log.reduce<Record<string, ImprovementLog[]>>((acc, entry) => {
+    // FIX: Removed generic type parameter from reduce call and used 'as' cast on initial value 
+    // to avoid "Untyped function calls may not accept type arguments" error.
+    const cycles = log.reduce((acc, entry) => {
         const cycleNum = getCycleNumberFromTitle(entry.title);
         if (cycleNum !== null) {
             const key = String(cycleNum);
@@ -78,13 +76,14 @@ const ImprovementCycleView: React.FC<{ log: ImprovementLog[], onRunAgain: () => 
             acc[key].push(entry);
         }
         return acc;
-    }, {});
+    }, {} as Record<string, ImprovementLog[]>);
 
     return (
         <div className="flex-1 flex flex-col min-h-0 p-4 bg-gray-800/50 backdrop-blur-md border border-gray-700 rounded-xl">
             <h2 className="text-2xl font-bold text-gray-100 mb-4 text-center flex-shrink-0">10x Improvement Hub</h2>
             <div className="flex-1 overflow-y-auto space-y-6 pr-2 scrollbar-thin">
                 {Object.entries(cycles).map(([cycleNum, cycleEntries]) => {
+                    // With the fix above, cycleEntries is correctly inferred as ImprovementLog[]
                     const evaluationEntry = cycleEntries.find(e => e.type === 'evaluation');
                     const refinementEntry = cycleEntries.find(e => e.type === 'refinement');
                     
@@ -141,3 +140,4 @@ const ImprovementCycleView: React.FC<{ log: ImprovementLog[], onRunAgain: () => 
 };
 
 export default ImprovementCycleView;
+    
