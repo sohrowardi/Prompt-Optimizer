@@ -45,7 +45,7 @@ const generate = async (prompt: string): Promise<string> => {
 
 const extractSection = (text: string, title: string, isCodeBlock: boolean): string | null => {
     const pattern = isCodeBlock
-        ? `\\*\\*${title}:\\*\\*\\s*\\\`\\\`\\\`([\\s\\S]+?)\\\`\\\`\\\``
+        ? `\\*\\*${title}:\\*\\*\\s*\\\`\\\`\\\`([\\s\\S]+?)\\\`\\\`\\\` `
         : `\\*\\*${title}:\\*\\*([\\s\\S]*?)(?=\\s*\\*\\*|$)`;
     
     const regex = new RegExp(pattern, 'm');
@@ -97,6 +97,14 @@ export const initialEnhance = async (userPrompt: string): Promise<{ enhancedProm
         const rawResponse = response.text.trim();
         const structuredData: InitialEnhancement = JSON.parse(rawResponse);
         
+        // CLEANUP: If the model wrapped the enhancedPrompt in markdown code blocks despite being in JSON, strip them.
+        let cleanPrompt = structuredData.enhancedPrompt;
+        // Case-insensitive match for code blocks, checking for optional markdown/text identifier
+        const codeBlockMatch = cleanPrompt.match(/^```(?:[a-zA-Z]+)?\s*([\s\S]*?)\s*```$/);
+        if (codeBlockMatch) {
+            cleanPrompt = codeBlockMatch[1].trim();
+        }
+
         const botMessageContent = `Here is the first version of your prompt. You can refine it with me below.\n\n**Critique:**\n${structuredData.critique}`;
 
         const initialBotMessage: ChatMessage = {
@@ -108,7 +116,7 @@ export const initialEnhance = async (userPrompt: string): Promise<{ enhancedProm
             },
         };
         
-        return { enhancedPrompt: structuredData.enhancedPrompt, initialBotMessage };
+        return { enhancedPrompt: cleanPrompt, initialBotMessage };
 
     } catch (error) {
         console.error("JSON generation for initial enhance failed, falling back.", error);
