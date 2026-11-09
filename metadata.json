@@ -1,0 +1,6 @@
+{
+  "name": "Prompt Optimizer Pro",
+  "description": "An advanced workbench to iteratively refine, evaluate, and enhance AI prompts by a factor of 10x using a structured, transparent process.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

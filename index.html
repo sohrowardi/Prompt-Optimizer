@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Prompt Optimizer Pro</title>
+    <meta name="description" content="An advanced workbench to iteratively refine, evaluate, and enhance AI prompts by a factor of 10x using a structured, transparent process." />
+    <meta property="og:title" content="Prompt Optimizer Pro" />
+    <meta property="og:description" content="An advanced workbench to iteratively refine, evaluate, and enhance AI prompts by a factor of 10x using a structured, transparent process." />
+    <script>
+      (function() {
+        if (typeof window !== 'undefined') {
+          window.addEventListener('error', function(e) {
+            var msg = e && (e.message || '');
+            var file = e && (e.filename || '');
+            if (file.indexOf('@vite/client') !== -1 || msg.indexOf('WebSocket') !== -1 || msg.indexOf('createWebSocketModuleRunnerTransport') !== -1) {
+              if (e.preventDefault) e.preventDefault();
+              if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+              return true;
+            }
+          }, true);
+
+          window.addEventListener('unhandledrejection', function(e) {
+            var reason = e && (e.reason && (e.reason.stack || e.reason.message) || String(e.reason || ''));
+            if (reason.indexOf('@vite/client') !== -1 || reason.indexOf('WebSocket') !== -1 || reason.indexOf('createWebSocketModuleRunnerTransport') !== -1) {
+              if (e.preventDefault) e.preventDefault();
+              if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+            }
+          }, true);
+
+          var NativeWS = window.WebSocket;
+          if (NativeWS) {
+            function DummyHMRWebSocket() {
+              var target = document.createDocumentFragment();
+              this.readyState = 1;
+              this.OPEN = 1;
+              this.CONNECTING = 0;
+              this.CLOSING = 2;
+              this.CLOSED = 3;
+              this.addEventListener = target.addEventListener.bind(target);
+              this.removeEventListener = target.removeEventListener.bind(target);
+              this.dispatchEvent = target.dispatchEvent.bind(target);
+              this.send = function() {};
+              this.close = function() {
+                this.readyState = 3;
+                this.dispatchEvent(new Event('close'));
+              };
+              var self = this;
+              setTimeout(function() {
+                self.dispatchEvent(new Event('open'));
+              }, 0);
+            }
+            DummyHMRWebSocket.prototype = NativeWS.prototype;
+            DummyHMRWebSocket.CONNECTING = 0;
+            DummyHMRWebSocket.OPEN = 1;
+            DummyHMRWebSocket.CLOSING = 2;
+            DummyHMRWebSocket.CLOSED = 3;
+
+            window.WebSocket = function(url, protocols) {
+              var isHMR = protocols === 'vite-hmr' || (typeof url === 'string' && (url.indexOf('token=') !== -1 || url.indexOf('vite-hmr') !== -1));
+              if (isHMR) {
+                return new DummyHMRWebSocket();
+              }
+              return new NativeWS(url, protocols);
+            };
+            window.WebSocket.prototype = NativeWS.prototype;
+            window.WebSocket.CONNECTING = 0;
+            window.WebSocket.OPEN = 1;
+            window.WebSocket.CLOSING = 2;
+            window.WebSocket.CLOSED = 3;
+          }
+        }
+      })();
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="bg-gray-900 text-gray-200 antialiased">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
